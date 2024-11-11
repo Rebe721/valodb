@@ -66,13 +66,17 @@ class AccountSelectView(discord.ui.View):
         # 名前の順序を指定通りに並べる（英字の後に続く数字でソート）
         sorted_accounts = sorted(available_accounts, key=lambda account: (account[0][0].lower(), int(''.join(filter(str.isdigit, account[0])) or 0)), reverse=True)
 
-        # プルダウンメニューの設定
-        self.account_selection = discord.ui.Select(
-            placeholder="利用するアカウントを選んでください",
-            options=[discord.SelectOption(label=f"{account[0]} - {account[1]}", value=account[0]) for account in sorted_accounts]
-        )
-        self.account_selection.callback = self.on_select_account
-        self.add_item(self.account_selection)
+        # 利用可能なアカウントが存在しない場合はエラーメッセージを表示
+        if not sorted_accounts:
+            self.add_item(discord.ui.Button(label="利用可能なアカウントはありません。", disabled=True))
+        else:
+            # プルダウンメニューの設定
+            self.account_selection = discord.ui.Select(
+                placeholder="利用するアカウントを選んでください",
+                options=[discord.SelectOption(label=f"{account[0]} - {account[1]}", value=account[0]) for account in sorted_accounts]
+            )
+            self.account_selection.callback = self.on_select_account
+            self.add_item(self.account_selection)
 
     async def on_select_account(self, interaction: discord.Interaction):
         selected_account_name = self.account_selection.values[0]
@@ -176,3 +180,4 @@ try:
 except Exception as e:
     print(f"エラーが発生しました: {e}")
     os.system("kill 1")  # ボットが停止する場合、Replit環境を終了させる
+
