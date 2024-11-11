@@ -10,22 +10,27 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# データベースファイルの絶対パスを取得
+db_path = os.path.join(os.path.dirname(__file__), 'accounts.db')
+
 # データベースの初期化関数
 def init_db():
-    conn = sqlite3.connect('accounts.db')
-    c = conn.cursor()
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS accounts (
-        name TEXT,
-        id TEXT,
-        password TEXT,
-        rank TEXT,
-        status TEXT,
-        borrower TEXT
-    )
-    ''')
-    conn.commit()
-    conn.close()
+    # データベースが存在しない場合に作成
+    if not os.path.exists(db_path):
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute('''
+        CREATE TABLE IF NOT EXISTS accounts (
+            name TEXT,
+            id TEXT,
+            password TEXT,
+            rank TEXT,
+            status TEXT,
+            borrower TEXT
+        )
+        ''')
+        conn.commit()
+        conn.close()
 
 # Botが準備完了したときのイベント
 @bot.event
@@ -39,7 +44,7 @@ async def on_ready():
 
 # アカウントを借りたユーザーが新たにアカウントを借りられないようにするチェック
 def can_borrow_account(user_id):
-    conn = sqlite3.connect('accounts.db')
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("SELECT borrower FROM accounts WHERE borrower=?", (user_id,))
     borrowed_accounts = c.fetchall()
@@ -57,7 +62,7 @@ class AccountSelectView(discord.ui.View):
             return
 
         # データベースから利用可能なアカウントを取得し、プルダウンメニューとして設定
-        conn = sqlite3.connect('accounts.db')
+        conn = sqlite3.connect(db_path)
         c = conn.cursor()
         c.execute("SELECT name, rank FROM accounts WHERE status='available'")
         available_accounts = c.fetchall()
@@ -82,7 +87,7 @@ class AccountSelectView(discord.ui.View):
         selected_account_name = self.account_selection.values[0]
 
         # データベースから選択されたアカウントの詳細情報を取得
-        conn = sqlite3.connect('accounts.db')
+        conn = sqlite3.connect(db_path)
         c = conn.cursor()
         c.execute("SELECT name, id, password, rank FROM accounts WHERE name=?", (selected_account_name,))
         account_details = c.fetchone()
@@ -109,7 +114,7 @@ class AccountSelectView(discord.ui.View):
 @bot.tree.command(name="register")
 async def register(interaction: discord.Interaction, name: str, account_id: str, password: str, rank: str):
     # データベースに新しいアカウントを追加
-    conn = sqlite3.connect('accounts.db')
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("INSERT INTO accounts (name, id, password, rank, status, borrower) VALUES (?, ?, ?, ?, 'available', '')", 
               (name, account_id, password, rank))
@@ -125,7 +130,7 @@ async def return_account(interaction: discord.Interaction, name: str, new_rank: 
     user_id = str(interaction.user.id)
 
     # データベースで該当アカウントを確認し、借りたアカウントであるかをチェック
-    conn = sqlite3.connect('accounts.db')
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("SELECT borrower FROM accounts WHERE name=? AND borrower=?", (name, user_id))
     account = c.fetchone()
@@ -180,4 +185,3 @@ try:
 except Exception as e:
     print(f"エラーが発生しました: {e}")
     os.system("kill 1")  # ボットが停止する場合、Replit環境を終了させる
-
