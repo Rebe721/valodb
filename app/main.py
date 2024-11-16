@@ -25,6 +25,7 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+
 # Botが準備完了したときのイベント
 @bot.event
 async def on_ready():
@@ -109,17 +110,21 @@ async def register(interaction: discord.Interaction, name: str, account_id: str,
               (name, account_id, password, rank))
     conn.commit()
     conn.close()
+
     # ephemeralをTrueに設定して本人にのみ通知
     await interaction.response.send_message(f"アカウント **{name}** が正常に登録されました。", ephemeral=True)
+
 # アカウントを返却するコマンド
 @bot.tree.command(name="return_account")
 async def return_account(interaction: discord.Interaction, name: str, new_rank: str):
     user_id = str(interaction.user.id)
+
     # データベースで該当アカウントを確認し、借りたアカウントであるかをチェック
     conn = sqlite3.connect('accounts.db')
     c = conn.cursor()
     c.execute("SELECT borrower FROM accounts WHERE name=? AND borrower=?", (name, user_id))
     account = c.fetchone()
+
     if account:
         # アカウントのランクを更新し、状態を利用可能に設定
         c.execute("UPDATE accounts SET rank=?, status='available', borrower='' WHERE name=?", (new_rank, name))
@@ -129,6 +134,7 @@ async def return_account(interaction: discord.Interaction, name: str, new_rank: 
     else:
         conn.close()
         await interaction.response.send_message("アカウントの返却に失敗しました。指定されたアカウントを借りていない可能性があります。", ephemeral=True)
+
 # スラッシュコマンド: アカウント利用
 @bot.tree.command(name="use_account")
 async def use_account(interaction: discord.Interaction):
@@ -145,10 +151,13 @@ async def use_account(interaction: discord.Interaction):
 async def helplist(interaction: discord.Interaction):
     help_message = """
     **利用可能なコマンド:**
+
     **/register <名前> <ID> <パスワード> <ランク>**  
     アカウントを登録します。
+
     **/use_account**  
     利用可能なアカウントから選択して使用します。
+
     **/return_account <名前> <新しいランク>**  
     使用中のアカウントを返却し、ランクを更新します。
     """
