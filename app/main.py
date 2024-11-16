@@ -62,13 +62,10 @@ class AccountSelectView(discord.ui.View):
         available_accounts = c.fetchall()
         conn.close()
 
-        # 名前の順序を指定通りに並べる（英字の後に続く数字でソート）
-        sorted_accounts = sorted(available_accounts, key=lambda account: (account[0][0].lower(), int(''.join(filter(str.isdigit, account[0])) or 0)), reverse=True)
-
         # プルダウンメニューの設定
         self.account_selection = discord.ui.Select(
             placeholder="利用するアカウントを選んでください",
-            options=[discord.SelectOption(label=f"{account[0]} - {account[1]}", value=account[0]) for account in sorted_accounts]
+            options=[discord.SelectOption(label=f"{account[0]} - {account[1]}", value=account[0]) for account in available_accounts]
         )
         self.account_selection.callback = self.on_select_account
         self.add_item(self.account_selection)
@@ -97,6 +94,12 @@ class AccountSelectView(discord.ui.View):
                 f"**ランク**: {account_details[3]}",
                 ephemeral=True
             )
+
+            # ログ用のメッセージを送信
+            log_channel_id = 1305414048187154474  # ログを送信するチャンネルIDを指定してください
+            log_channel = interaction.guild.get_channel(log_channel_id)
+            if log_channel:
+                await log_channel.send(f"{interaction.user.display_name} がアカウント **{selected_account_name}** を借りました。")
         else:
             await interaction.response.send_message("アカウント情報の取得に失敗しました。", ephemeral=True)
 
@@ -175,4 +178,3 @@ try:
 except Exception as e:
     print(f"エラーが発生しました: {e}")
     os.system("kill 1")  # ボットが停止する場合、Replit環境を終了させる
-
