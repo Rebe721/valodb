@@ -4,6 +4,23 @@ from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 import json
 import os
+import threading
+from flask import Flask
+
+# Flask アプリを作成
+app = Flask(__name__)
+
+@app.route("/")
+def health_check():
+    return "OK", 200
+
+# Flask サーバーをバックグラウンドで起動
+def run_server():
+    app.run(host="0.0.0.0", port=8080)
+
+server_thread = threading.Thread(target=run_server)
+server_thread.daemon = True
+server_thread.start()
 
 # Google Sheets API設定
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
