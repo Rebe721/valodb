@@ -68,35 +68,55 @@ async def return_account(interaction: discord.Interaction, name: str, new_rank: 
 # アカウント選択
 class AccountSelectView(View):
     def __init__(self, user_id: str, records: list):
-        super().__init__(timeout=900.0)
+        super().__init__(timeout=900.0)  # タイムアウトを15分に設定
         self.user_id = user_id
         self.records = records
-        self.account_selection = Select(placeholder="利用するアカウントを選んでください", min_values=1, max_values=1, options=[])
-        for record in records:
-            self.account_selection.add_option(label=record["name"], value=record["name"])
+
+        # プルダウンメニューのオプションを生成
+        self.account_selection = Select(
+            placeholder="利用するアカウントを選んでください",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label=record["name"], value=record["name"])
+                for record in records
+            ]
+        )
+        self.account_selection.callback = self.on_select_account
         self.add_item(self.account_selection)
 
     async def on_select_account(self, interaction: discord.Interaction):
-        selected_account_name = self.account_selection.values[0]
-        for index, record in enumerate(self.records):
-            if record["name"] == selected_account_name:
-                sheet.update_cell(index + 2, 5, "borrowed")
-                sheet.update_cell(index + 2, 6, self.user_id)
-                await interaction.response.send_message(
-                    f"アカウント **{record['name']}** の詳細:\n"
-                    f"**ID**: {record['id']}\n"
-                    f"**パスワード**: {record['password']}\n"
-                    f"**ランク**: {record['rank']}",
-                    ephemeral=True
-                )
-                # 通知用チャンネル
-                channel = bot.get_channel(1307661467578925056)  # チャンネルIDが正しいことを確認
-                if channel is not None:
-                    try:
+        try:
+            # 選択されたアカウントを取得
+            selected_account_name = self.account_selection.values[0]
+
+            # 該当するアカウントを検索
+            for index, record in enumerate(self.records):
+                if record["name"] == selected_account_name:
+                    # アカウントの状態を更新
+                    sheet.update_cell(index + 2, 5, "borrowed")  # 状態を "borrowed" に
+                    sheet.update_cell(index + 2, 6, self.user_id)  # 借り手を設定
+
+                    # 応答メッセージを送信
+                    await interaction.response.send_message(
+                        f"アカウント **{record['name']}** の詳細:\n"
+                        f"**ID**: {record['id']}\n"
+                        f"**パスワード**: {record['password']}\n"
+                        f"**ランク**: {record['rank']}",
+                        ephemeral=True
+                    )
+
+                    # 全体通知
+                    channel = bot.get_channel(1307661467578925056)  # 通知用チャンネルID
+                    if channel is not None:
                         await channel.send(f"ユーザー <@{self.user_id}> がアカウント **{record['name']}** を借りました！")
-                    except discord.errors.Forbidden:
-                        print(f"通知を送信できません。チャンネルのアクセス権限を確認してください。")
-                return
+                    return
+
+            # アカウントが見つからない場合
+            await interaction.response.send_message("選択されたアカウントが見つかりませんでした。", ephemeral=True)
+        except Exception as e:
+            print(f"選択処理中のエラー: {e}")
+            await interaction.response.send_message("アカウント選択中にエラーが発生しました。", ephemeral=True)
 
 # アカウント利用
 @bot.tree.command(name="use_account")
