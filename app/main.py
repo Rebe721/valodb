@@ -38,7 +38,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# アカウントの操作関数
+# アカウント操作関数
 def get_available_accounts():
     records = sheet.get_all_records()
     return [record for record in records if record["Status"] == "available"]
@@ -53,64 +53,42 @@ def update_account_status(name, status, borrower=None, rank=None):
                 sheet.update_cell(i + 2, 4, rank)  # Rank列
             break
 
-def can_borrow_account(user_id):
-    records = sheet.get_all_records()
-    return all(record["Borrower"] != str(user_id) for record in records)
+# プルダウンメニューを含むView
+class AccountSelectView(discord.ui.View):
+    def __init__(self, user_id):
+        super().__init__(timeout=None)
 
-# Botイベント
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user}')
+        available_accounts = get_available_accounts()
 
-# スラッシュコマンド
+        options = [
+            discord.SelectOption(label=f"{account['Name']} - {account['Rank']}", value=account['Name'])
+            for account in available_accounts
+        ]
+
+        self.select_menu = discord.ui.Select(
+            placeholder="利用するアカウントを選んでください",
+            options=options
+        )
+        self.select_menu.callback = self.on_select_account
+        self.add_item(self.select_menu)
+
+    async def on_select_account(self, interaction: discord.Interaction):
+        selected_account = self.select_menu.values[0]
+        update_account_status(selected_account, "borrowed", interaction.user.id)
+        await interaction.response.send_message(
+            f"アカウント **{selected_account}** を借りました！",
+            ephemeral=True
+        )
+
+# スラッシュコマンド: アカウント利用
 @bot.tree.command(name="use_account")
 async def use_account(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
-    if not can_borrow_account(user_id):
-        await interaction.response.send_message("既にアカウントを借りています。返却してください。", ephemeral=True)
-        return
-
     available_accounts = get_available_accounts()
     if not available_accounts:
         await interaction.response.send_message("利用可能なアカウントがありません。", ephemeral=True)
-        return
-
-    options = [
-        discord.SelectOption(label=f"{record['Name']} - {record['Rank']}", value=f"{record['Name']}_{i}")
-        for i, record in enumerate(available_accounts)
-    ]
-
-    class AccountSelectView(discord.ui.View):
-        @discord.ui.select(placeholder="利用するアカウントを選んでください", options=options)
-        async def select_callback(self, select: discord.ui.Select, interaction: discord.Interaction):
-            selected_account = select.values[0]  # 修正：選択された値を取得
-            selected_account_name = selected_account.split("_")[0]  # 元のアカウント名を取り出す
-            update_account_status(selected_account_name, "borrowed", interaction.user.id)
-            await interaction.response.send_message(
-                f"アカウント **{selected_account_name}** を借りました！", ephemeral=True
-            )
-            await interaction.channel.send(f"**{interaction.user.name}** がアカウント **{selected_account_name}** を借りました！")
-
-    await interaction.response.send_message("利用するアカウントを選んでください:", view=AccountSelectView(), ephemeral=True)
-
-@bot.tree.command(name="return_account")
-async def return_account(interaction: discord.Interaction, name: str, new_rank: str):
-    user_id = str(interaction.user.id)
-    records = sheet.get_all_records()
-    for record in records:
-        if record["Name"] == name and record["Borrower"] == user_id:
-            update_account_status(name, "available", rank=new_rank)
-            await interaction.response.send_message(f"アカウント **{name}** を返却しました。ランクを更新しました。", ephemeral=True)
-            return
-    await interaction.response.send_message("そのアカウントは借りていません。", ephemeral=True)
-
-@bot.tree.command(name="register")
-async def register(interaction: discord.Interaction, name: str, account_id: str, password: str, rank: str):
-    try:
-        sheet.append_row([name, account_id, password, rank, "available", ""])
-        await interaction.response.send_message(f"アカウント **{name}** を登録しました。", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"エラー: {e}", ephemeral=True)
+    else:
+        await interaction.response.send_message("利用するアカウントを選んでください:", view=AccountSelectView(user_id), ephemeral=True)
 
 # Bot起動
 bot.run(os.environ["TOKEN"])
