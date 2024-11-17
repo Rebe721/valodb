@@ -54,7 +54,9 @@ async def on_ready():
 def can_borrow_account(user_id):
     records = sheet.get_all_records()
     for record in records:
-        if record.get("borrower") == str(user_id):
+        # デバッグ用ログ
+        print(f"チェック中のデータ: {record}")
+        if str(record.get("borrower", "")) == str(user_id):
             return False
     return True
 
@@ -71,13 +73,20 @@ async def return_account(interaction: discord.Interaction, name: str, new_rank: 
     user_id = str(interaction.user.id)
     records = sheet.get_all_records()
     for index, record in enumerate(records):
-        if record["name"] == name and record.get("borrower") == user_id:
-            # アカウントのランクを更新し、状態を利用可能に設定
-            sheet.update_cell(index + 2, 4, new_rank)  # ランクの列
-            sheet.update_cell(index + 2, 5, "available")  # 状態の列
-            sheet.update_cell(index + 2, 6, "")  # 借りたユーザーの列をクリア
-            await interaction.response.send_message(f"アカウント **{name}** が返却され、ランクが更新されました。", ephemeral=True)
-            return
+        # デバッグ用ログ
+        print(f"現在のデータ: {record}")
+        if record.get("name", "").strip() == name and record.get("borrower", "").strip() == user_id:
+            try:
+                # スプレッドシートの更新
+                sheet.update_cell(index + 2, 4, new_rank)  # ランクを更新
+                sheet.update_cell(index + 2, 5, "available")  # 状態を更新
+                sheet.update_cell(index + 2, 6, "")  # 借り手をクリア
+                await interaction.response.send_message(f"アカウント **{name}** が返却され、ランクが更新されました。", ephemeral=True)
+                return
+            except Exception as e:
+                print(f"スプレッドシートの更新中にエラー: {e}")
+                await interaction.response.send_message("アカウントの返却中にエラーが発生しました。", ephemeral=True)
+                return
     await interaction.response.send_message("アカウントの返却に失敗しました。指定されたアカウントを借りていない可能性があります。", ephemeral=True)
 
 # アカウントを利用するコマンド
