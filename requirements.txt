@@ -1,8 +1,7 @@
 discord.py
-google-api-python-client
+gspread
 google-auth
 google-auth-oauthlib
-flask
-gunicorn
-gspread
+google-auth-httplib2
 oauth2client
+Flask
