@@ -27,7 +27,7 @@ server_thread.start()
 
 # Google Sheets API設定
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-credentials_info = json.loads(os.environ["CREDENTIALS_JSON"]) 
+credentials_info = json.loads(os.environ["CREDENTIALS_JSON"])  # 環境変数から認証情報を取得
 credentials = Credentials.from_service_account_info(credentials_info, scopes=SCOPES)
 service = build('sheets', 'v4', credentials=credentials)
 
@@ -114,9 +114,10 @@ async def helplist(interaction: discord.Interaction):
     """
     await interaction.response.send_message(help_message, ephemeral=True)
 
-# Google スプレッドシートの認証設定
+# Google スプレッドシートの認証設定（oauth2clientからgoogle-authに変更）
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = ServiceAccountCredentials.from_json_keyfile_name("CREDENTIALS_JSON", scope)
+credentials_info = json.loads(os.environ["CREDENTIALS_JSON"])  # 環境変数から認証情報を取得
+credentials = Credentials.from_service_account_info(credentials_info, scopes=scope)  # google-authを使用
 gc = gspread.authorize(credentials)
 
 # スプレッドシートを取得
@@ -210,4 +211,4 @@ async def return_account(interaction: discord.Interaction, name: str, new_rank: 
 
 # Botを起動
 keep_alive()  # Replitの場合にサーバーを維持
-bot.run(os.environ["DISCORD_TOKEN"])
+bot.run(os.environ["TOKEN"])
