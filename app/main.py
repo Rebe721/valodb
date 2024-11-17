@@ -21,16 +21,6 @@ gc = gspread.authorize(credentials)
 spreadsheet_name = "Accounts"  # 変更してください
 sheet = gc.open(spreadsheet_name).sheet1
 
-# 必要な列の初期化
-def initialize_sheet():
-    headers = ["name", "id", "password", "rank", "status", "borrower"]
-    current_headers = sheet.row_values(1)
-    if current_headers != headers:
-        print("Initializing headers...")
-        sheet.insert_row(headers, index=1)
-
-initialize_sheet()  # 初期化関数を呼び出し
-
 # Bot の設定
 intents = discord.Intents.default()
 intents.message_content = True
@@ -64,8 +54,7 @@ async def on_ready():
 def can_borrow_account(user_id):
     records = sheet.get_all_records()
     for record in records:
-        print(f"Checking record: {record}")  # デバッグ用
-        if record.get("borrower") == str(user_id):  # キーが存在しない場合に備えて .get を使用
+        if record.get("borrower") == str(user_id):
             return False
     return True
 
@@ -128,8 +117,8 @@ async def use_account(interaction: discord.Interaction):
             for index, record in enumerate(records):
                 if record["name"] == selected_account_name:
                     # アカウントを貸し出し状態に更新
-                    sheet.update_cell(index + 2, 5, "borrowed")
-                    sheet.update_cell(index + 2, 6, user_id)
+                    sheet.update_cell(index + 2, 5, "borrowed")  # 状態を更新
+                    sheet.update_cell(index + 2, 6, user_id)     # 借り手を更新
                     await interaction.response.send_message(
                         f"アカウント **{record['name']}** の詳細:\n"
                         f"**ID**: {record['id']}\n"
