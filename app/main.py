@@ -5,6 +5,23 @@ import os
 import json
 from google.oauth2.service_account import Credentials
 from discord.ui import View, Select, Button
+import threading
+from flask import Flask
+
+# Flask アプリを作成
+app = Flask(__name__)
+
+@app.route("/")
+def health_check():
+    return "OK", 200
+
+# Flask サーバーをバックグラウンドで起動
+def run_server():
+    app.run(host="0.0.0.0", port=8080)
+
+server_thread = threading.Thread(target=run_server)
+server_thread.daemon = True
+server_thread.start()
 
 # Google Sheetsのスプレッドシートキー
 SPREADSHEET_ID = "1_xEKOwz4WsYv7C4bQRpwuRl4AOJnokFZktVpB9yIRCc"  # あなたのスプレッドシートのIDをここに設定してください
