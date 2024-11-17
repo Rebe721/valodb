@@ -83,7 +83,7 @@ async def use_account(interaction: discord.Interaction):
     class AccountSelectView(discord.ui.View):
         @discord.ui.select(placeholder="利用するアカウントを選んでください", options=options)
         async def select_callback(self, select, interaction):
-            selected_account = select.values[0]
+            selected_account = self.children[0].values[0]
             update_account_status(selected_account, "borrowed", user_id)
             await interaction.response.send_message(
                 f"アカウント **{selected_account}** を借りました！", ephemeral=True
