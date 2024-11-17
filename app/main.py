@@ -127,7 +127,7 @@ async def use_account(interaction: discord.Interaction):
                         ephemeral=True
                     )
                     # 全体通知
-                    channel = bot.get_channel(1305414048187154474)  # 通知するチャンネル ID を設定
+                    channel = bot.get_channel(1307661467578925056)  # 通知するチャンネル ID を設定
                     await channel.send(f"ユーザー <@{user_id}> がアカウント **{record['name']}** を借りました！")
                     return
 
