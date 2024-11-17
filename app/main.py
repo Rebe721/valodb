@@ -18,7 +18,7 @@ credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_data,
 gc = gspread.authorize(credentials)
 
 # スプレッドシートを開く（シート名を指定）
-spreadsheet_name = "Accounts"  # 変更してください
+spreadsheet_name = "your-spreadsheet-name"  # 変更してください
 sheet = gc.open(spreadsheet_name).sheet1
 
 # Bot の設定
@@ -52,11 +52,13 @@ async def on_ready():
 
 # アカウントを借りたユーザーが新たにアカウントを借りられないようにするチェック
 def can_borrow_account(user_id):
-    records = sheet.get_all_records()
     for record in records:
-        if record["borrower"] == str(user_id):
-            return False
-    return True
+        # borrowerキーが存在するかを確認し、存在しない場合は空文字を返す
+        borrower = record.get("borrower", "")
+        
+        if borrower == str(user_id):
+            return False  # すでに借りている
+    return True  # 借りていない
 
 # アカウントの登録コマンド
 @bot.tree.command(name="register")
