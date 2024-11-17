@@ -81,15 +81,15 @@ async def use_account(interaction: discord.Interaction):
     ]
 
     class AccountSelectView(discord.ui.View):
-        @discord.ui.select(placeholder="利用するアカウントを選んでください", options=options)
-        async def select_callback(self, select, interaction: discord.Interaction):
-            # 修正: select.values[0] を使用して選択値を取得
-            selected_account = select.values[0]
-            update_account_status(selected_account, "borrowed", interaction.user.id)
-            await interaction.response.send_message(
-                f"アカウント **{selected_account}** を借りました！", ephemeral=True
-            )
-            await interaction.channel.send(f"**{interaction.user.name}** がアカウント **{selected_account}** を借りました！")
+    @discord.ui.select(placeholder="利用するアカウントを選んでください", options=options)
+    async def select_callback(self, select: discord.ui.Select, interaction: discord.Interaction):
+        # 修正: select.values[0] を正しく参照
+        selected_account = select.values[0]
+        update_account_status(selected_account, "borrowed", interaction.user.id)
+        await interaction.response.send_message(
+            f"アカウント **{selected_account}** を借りました！", ephemeral=True
+        )
+        await interaction.channel.send(f"**{interaction.user.name}** がアカウント **{selected_account}** を借りました！")
 
     await interaction.response.send_message("利用するアカウントを選んでください:", view=AccountSelectView(), ephemeral=True)
 
