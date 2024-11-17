@@ -21,6 +21,16 @@ gc = gspread.authorize(credentials)
 spreadsheet_name = "Accounts"  # 変更してください
 sheet = gc.open(spreadsheet_name).sheet1
 
+# 必要な列の初期化
+def initialize_sheet():
+    headers = ["name", "id", "password", "rank", "status", "borrower"]
+    current_headers = sheet.row_values(1)
+    if current_headers != headers:
+        print("Initializing headers...")
+        sheet.insert_row(headers, index=1)
+
+initialize_sheet()  # 初期化関数を呼び出し
+
 # Bot の設定
 intents = discord.Intents.default()
 intents.message_content = True
@@ -54,7 +64,8 @@ async def on_ready():
 def can_borrow_account(user_id):
     records = sheet.get_all_records()
     for record in records:
-        if record["borrower"] == str(user_id):
+        print(f"Checking record: {record}")  # デバッグ用
+        if record.get("borrower") == str(user_id):  # キーが存在しない場合に備えて .get を使用
             return False
     return True
 
@@ -71,7 +82,7 @@ async def return_account(interaction: discord.Interaction, name: str, new_rank: 
     user_id = str(interaction.user.id)
     records = sheet.get_all_records()
     for index, record in enumerate(records):
-        if record["name"] == name and record["borrower"] == user_id:
+        if record["name"] == name and record.get("borrower") == user_id:
             # アカウントのランクを更新し、状態を利用可能に設定
             sheet.update_cell(index + 2, 4, new_rank)  # ランクの列
             sheet.update_cell(index + 2, 5, "available")  # 状態の列
@@ -92,7 +103,7 @@ async def use_account(interaction: discord.Interaction):
 
     # 利用可能なアカウントを取得
     records = sheet.get_all_records()
-    available_accounts = [record for record in records if record["status"] == "available"]
+    available_accounts = [record for record in records if record.get("status") == "available"]
 
     if not available_accounts:
         await interaction.response.send_message("利用可能なアカウントがありません。", ephemeral=True)
