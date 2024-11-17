@@ -76,20 +76,20 @@ async def use_account(interaction: discord.Interaction):
         return
 
     options = [
-        discord.SelectOption(label=f"{record['Name']} - {record['Rank']}", value=record["Name"])
-        for record in available_accounts
+        discord.SelectOption(label=f"{record['Name']} - {record['Rank']}", value=f"{record['Name']}_{i}")
+        for i, record in enumerate(available_accounts)
     ]
 
     class AccountSelectView(discord.ui.View):
         @discord.ui.select(placeholder="利用するアカウントを選んでください", options=options)
         async def select_callback(self, select: discord.ui.Select, interaction: discord.Interaction):
-            selected_account = select.values[0]  # 選択されたアカウントを取得
-            update_account_status(selected_account, "borrowed", interaction.user.id)  # interaction.userを正しく参照
+            selected_account = interaction.data["values"][0]  # 正しく選択された値を取得
+            selected_account_name = selected_account.split("_")[0]  # 元のアカウント名を取り出す
+            update_account_status(selected_account_name, "borrowed", interaction.user.id)
             await interaction.response.send_message(
-                f"アカウント **{selected_account}** を借りました！", ephemeral=True
+                f"アカウント **{selected_account_name}** を借りました！", ephemeral=True
             )
-            await interaction.channel.send(f"**{interaction.user.name}** がアカウント **{selected_account}** を借りました！")
-
+            await interaction.channel.send(f"**{interaction.user.name}** がアカウント **{selected_account_name}** を借りました！")
 
     await interaction.response.send_message("利用するアカウントを選んでください:", view=AccountSelectView(), ephemeral=True)
 
