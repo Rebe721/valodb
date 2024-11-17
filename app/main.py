@@ -112,7 +112,7 @@ class AccountSelectView(View):
                     )
 
                     # 全体通知
-                    channel = bot.get_channel(1307661467578925056)  # 通知用チャンネルID
+                    channel = bot.get_channel(1305414048187154474)  # 通知用チャンネルID
                     if channel is not None:
                         await channel.send(f"ユーザー <@{self.user_id}> がアカウント **{record['name']}** を借りました！")
                     return
