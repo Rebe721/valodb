@@ -54,7 +54,8 @@ async def on_ready():
 def can_borrow_account(user_id):
     records = sheet.get_all_records()
     for record in records:
-        if record["borrower"] == str(user_id):
+        # 'borrower' カラムが存在する場合のみ比較する
+        if record.get("borrower", "") == str(user_id):
             return False
     return True
 
@@ -62,7 +63,7 @@ def can_borrow_account(user_id):
 @bot.tree.command(name="register")
 async def register(interaction: discord.Interaction, name: str, account_id: str, password: str, rank: str):
     # スプレッドシートに新しいアカウントを登録
-    sheet.append_row([name, account_id, password, rank, "available", ""])
+    sheet.append_row([name, account_id, password, rank, "available", ""])  # borrower を空白に設定
     await interaction.response.send_message(f"アカウント **{name}** が正常に登録されました。", ephemeral=True)
 
 # アカウントを返却するコマンド
