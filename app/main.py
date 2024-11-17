@@ -63,9 +63,13 @@ def can_borrow_account(user_id):
 # アカウントの登録コマンド
 @bot.tree.command(name="register")
 async def register(interaction: discord.Interaction, name: str, account_id: str, password: str, rank: str):
-    # スプレッドシートに新しいアカウントを登録
-    sheet.append_row([name, account_id, password, rank, "available", ""])
-    await interaction.response.send_message(f"アカウント **{name}** が正常に登録されました。", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)  # 一時保留
+    try:
+        sheet.append_row([name, account_id, password, rank, "available", ""])
+        await interaction.followup.send(f"アカウント **{name}** が正常に登録されました。", ephemeral=True)
+    except Exception as e:
+        print(f"エラー: {e}")
+        await interaction.followup.send("登録中にエラーが発生しました。", ephemeral=True)
 
 # アカウントを返却するコマンド
 @bot.tree.command(name="return_account")
@@ -75,7 +79,7 @@ async def return_account(interaction: discord.Interaction, name: str, new_rank: 
     for index, record in enumerate(records):
         # デバッグ用ログ
         print(f"現在のデータ: {record}")
-        if record.get("name", "").strip() == name and record.get("borrower", "").strip() == user_id:
+        if record.get("name", "").strip() == name and str(record.get("borrower", "")).strip() == user_id:
             try:
                 # スプレッドシートの更新
                 sheet.update_cell(index + 2, 4, new_rank)  # ランクを更新
@@ -125,20 +129,28 @@ async def use_account(interaction: discord.Interaction):
             selected_account_name = self.account_selection.values[0]
             for index, record in enumerate(records):
                 if record["name"] == selected_account_name:
-                    # アカウントを貸し出し状態に更新
-                    sheet.update_cell(index + 2, 5, "borrowed")  # 状態を更新
-                    sheet.update_cell(index + 2, 6, user_id)     # 借り手を更新
-                    await interaction.response.send_message(
-                        f"アカウント **{record['name']}** の詳細:\n"
-                        f"**ID**: {record['id']}\n"
-                        f"**パスワード**: {record['password']}\n"
-                        f"**ランク**: {record['rank']}",
-                        ephemeral=True
-                    )
-                    # 全体通知
-                    channel = bot.get_channel(1307661467578925056)  # 通知するチャンネル ID を設定
-                    await channel.send(f"ユーザー <@{user_id}> がアカウント **{record['name']}** を借りました！")
-                    return
+                    try:
+                        # アカウントを貸し出し状態に更新
+                        sheet.update_cell(index + 2, 5, "borrowed")  # 状態を更新
+                        sheet.update_cell(index + 2, 6, user_id)     # 借り手を更新
+                        await interaction.response.send_message(
+                            f"アカウント **{record['name']}** の詳細:\n"
+                            f"**ID**: {record['account_id']}\n"
+                            f"**パスワード**: {record['password']}\n"
+                            f"**ランク**: {record['rank']}",
+                            ephemeral=True
+                        )
+                        # 全体通知
+                        channel = bot.get_channel(1307661467578925056)  # 通知するチャンネル ID を設定
+                        if channel:
+                            await channel.send(f"ユーザー <@{user_id}> がアカウント **{record['name']}** を借りました！")
+                        else:
+                            print("指定されたチャンネルが見つかりません。")
+                        return
+                    except Exception as e:
+                        print(f"スプレッドシート更新エラー: {e}")
+                        await interaction.response.send_message("アカウントの貸し出し中にエラーが発生しました。", ephemeral=True)
+                        return
 
     await interaction.response.send_message("利用するアカウントを選んでください:", view=AccountSelectView(), ephemeral=True)
 
