@@ -18,7 +18,7 @@ credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_data,
 gc = gspread.authorize(credentials)
 
 # スプレッドシートを開く（シート名を指定）
-spreadsheet_name = "your-spreadsheet-name"  # 変更してください
+spreadsheet_name = "Accounts"  # 変更してください
 sheet = gc.open(spreadsheet_name).sheet1
 
 # Bot の設定
