@@ -118,7 +118,7 @@ async def use_account(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     records = [
         {"name": row[0], "id": row[1], "password": row[2], "rank": row[3], "status": row[4], "borrower": row[5]}
-        for row in get_sheet_data("Sheet1!A2:F")
+        for row in get_sheet_data("Accounts!A2:F")
     ]
 
     # ユーザーがすでに借りているアカウントを確認
