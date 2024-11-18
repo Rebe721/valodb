@@ -84,8 +84,13 @@ async def use_account(interaction: discord.Interaction):
         )
         return
 
+    # スプレッドシートデータを取得し、行番号を追加
     accounts = sheet.get_all_records()
-    available_accounts = [acc for acc in accounts if acc["status"] == "available"]
+    available_accounts = [
+        {**acc, "row": index + 2}  # 行番号を計算 (ヘッダー行を考慮)
+        for index, acc in enumerate(accounts)
+        if acc["status"] == "available"
+    ]
 
     if not available_accounts:
         await interaction.response.send_message(
@@ -107,6 +112,7 @@ async def use_account(interaction: discord.Interaction):
             selected_account = next(
                 acc for acc in available_accounts if acc["name"] == self.values[0]
             )
+            # 'row' を利用して行を更新
             sheet.update_cell(selected_account["row"], 5, "borrowed")
             borrowed_accounts[interaction.user.id] = selected_account
             user_status[interaction.user.id] = True
