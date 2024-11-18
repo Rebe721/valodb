@@ -1,21 +1,20 @@
+import os
+import json
+from oauth2client.service_account import ServiceAccountCredentials
 import discord
 from discord.ext import commands
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import os
-import json
 
-# Koyebから環境変数を取得
-TOKEN = os.getenv("TOKEN")
-
-# Google スプレッドシートの設定
+# GoogleスプレッドシートAPIのスコープ
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-gc = gspread.authorize(credentials)
-sheet = gc.open("Accounts").sheet1  # スプレッドシート名を設定
 
+# 環境変数から認証情報を取得
 credentials_info = json.loads(os.getenv("CREDENTIALS_JSON"))
 credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
+
+# Googleスプレッドシートの設定
+gc = gspread.authorize(credentials)
+sheet = gc.open("Accounts").sheet1  # スプレッドシート名を設定
 
 # Discord Botの設定
 intents = discord.Intents.default()
@@ -100,5 +99,6 @@ async def return_account(ctx):
     await ctx.send(f"アカウント {account['name']} を返却しました。", ephemeral=True)
     await ctx.channel.send(f"{ctx.author.name}が{account['name']}を返却しました！")
 
+# Discord Botを起動
+TOKEN = os.getenv("TOKEN")
 bot.run(TOKEN)
-
