@@ -4,6 +4,17 @@ from oauth2client.service_account import ServiceAccountCredentials
 import discord
 from discord.ext import commands
 import gspread
+from flask import Flask
+
+# Flaskアプリのセットアップ（Koyebのヘルスチェック用）
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Instance is healthy. All health checks are passing."
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
 
 # GoogleスプレッドシートAPIのスコープ
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
