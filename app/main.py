@@ -171,7 +171,7 @@ async def return_account(interaction: discord.Interaction):
                 ephemeral=True
             )
             await interaction.channel.send(
-                f"{interaction.user.name}が{account['name']}を返却しました！"
+                f"{interaction.user.name}が{account['name']}を返却しました！\n**更新後のランク**:{new_rank}"
             )
 
     # ランク更新モーダルを表示
