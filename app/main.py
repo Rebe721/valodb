@@ -6,16 +6,6 @@ from discord.ext import commands
 import gspread
 from flask import Flask
 
-# Flaskアプリのセットアップ（Koyebのヘルスチェック用）
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Instance is healthy. All health checks are passing."
-
-def run():
-    app.run(host="0.0.0.0", port=8080)
-
 # GoogleスプレッドシートAPIのスコープ
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
@@ -110,9 +100,23 @@ async def return_account(ctx):
     await ctx.send(f"アカウント {account['name']} を返却しました。", ephemeral=True)
     await ctx.channel.send(f"{ctx.author.name}が{account['name']}を返却しました！")
 
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
+# Flaskアプリケーションの設定 (ヘルスチェック用)
+app = Flask(__name__)
+
+@app.route("/health")
+def health_check():
+    return "OK", 200
+
+# Discord Botを起動するスレッドとFlaskサーバーを同時に起動
+from threading import Thread
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8080)
+
+# Flask サーバーをバックグラウンドで実行
+thread = Thread(target=run_flask)
+thread.daemon = True
+thread.start()
 
 # Discord Botを起動
 TOKEN = os.getenv("TOKEN")
