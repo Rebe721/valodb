@@ -7,14 +7,15 @@ import json
 
 # Koyebから環境変数を取得
 TOKEN = os.getenv("TOKEN")
-credentials_info = json.loads(os.getenv("CREDENTIALS_JSON"))
-credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
 
 # Google スプレッドシートの設定
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 credentials = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 gc = gspread.authorize(credentials)
 sheet = gc.open("Accounts").sheet1  # スプレッドシート名を設定
+
+credentials_info = json.loads(os.getenv("CREDENTIALS_JSON"))
+credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
 
 # Discord Botの設定
 intents = discord.Intents.default()
