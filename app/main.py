@@ -128,11 +128,28 @@ class AccountSelectView(View):
 async def use_account(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     records = sheet.get_all_records()
+
+    # ユーザーがすでに借りているアカウントを確認
+    borrowed_account = next((record for record in records if record.get("borrower") == user_id), None)
+    if borrowed_account:
+        await interaction.response.send_message(
+            f"あなたは既にアカウント **{borrowed_account['name']}** を借りています。返却してください。",
+            ephemeral=True
+        )
+        return
+
+    # 利用可能なアカウントを取得
     available_accounts = [record for record in records if record.get("status") == "available"]
     if not available_accounts:
         await interaction.response.send_message("利用可能なアカウントがありません。", ephemeral=True)
         return
-    await interaction.response.send_message("利用するアカウントを選んでください:", view=AccountSelectView(user_id, available_accounts), ephemeral=True)
+
+    # アカウント選択メニューを表示
+    await interaction.response.send_message(
+        "利用するアカウントを選んでください:",
+        view=AccountSelectView(user_id, available_accounts),
+        ephemeral=True
+    )
 
 # ボット起動時の処理
 @bot.event
