@@ -32,21 +32,58 @@ user_status = {}
 # 登録コマンド
 @tree.command(name="register", description="新しいアカウントを登録します")
 async def register(interaction: discord.Interaction):
-    async def prompt(prompt_text):
-        await interaction.response.send_message(prompt_text, ephemeral=True)
-        return (await bot.wait_for(
-            "message",
-            check=lambda m: m.author == interaction.user and m.channel == interaction.channel
-        )).content
+    # モーダルの作成
+    modal = discord.ui.Modal(title="アカウント登録フォーム")
 
-    name = await prompt("Nameを入力してください:")
-    account_id = await prompt("IDを入力してください:")
-    password = await prompt("Passwordを入力してください:")
-    rank = await prompt("Rankを入力してください:")
+    # 各入力フィールドを追加
+    modal.add_item(
+        discord.ui.TextInput(
+            label="Name",
+            placeholder="例: Tanaka Taro",
+            custom_id="account-name",
+            required=True
+        )
+    )
+    modal.add_item(
+        discord.ui.TextInput(
+            label="ID",
+            placeholder="例: user123",
+            custom_id="account-id",
+            required=True
+        )
+    )
+    modal.add_item(
+        discord.ui.TextInput(
+            label="Password",
+            placeholder="例: ******",
+            custom_id="account-password",
+            required=True
+        )
+    )
+    modal.add_item(
+        discord.ui.TextInput(
+            label="Rank",
+            placeholder="例: Beginner",
+            custom_id="account-rank",
+            required=True
+        )
+    )
 
-    # スプレッドシートに追加
-    sheet.append_row([name, account_id, password, rank, "available"])
-    await interaction.followup.send(f"アカウント {name} を登録しました！", ephemeral=True)
+    # モーダル送信後の処理
+    async def modal_callback(interaction_modal: discord.Interaction):
+        name = interaction_modal.text_values["account-name"]
+        account_id = interaction_modal.text_values["account-id"]
+        password = interaction_modal.text_values["account-password"]
+        rank = interaction_modal.text_values["account-rank"]
+
+        # スプレッドシートに追加
+        sheet.append_row([name, account_id, password, rank, "available"])
+        await interaction_modal.response.send_message(
+            f"アカウント {name} を登録しました！", ephemeral=True
+        )
+
+    modal.callback = modal_callback
+    await interaction.response.send_modal(modal)
 
 # アカウント選択コマンド
 @tree.command(name="use_account", description="アカウントを借りる")
