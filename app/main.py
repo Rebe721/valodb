@@ -3,10 +3,12 @@ from discord.ext import commands
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
+import json
 
 # Koyebから環境変数を取得
 TOKEN = os.getenv("TOKEN")
-CREDENTIALS_JSON = os.getenv("CREDENTIALS_JSON")
+credentials_info = json.loads(os.getenv("CREDENTIALS_JSON"))
+credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
 
 # Google スプレッドシートの設定
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
