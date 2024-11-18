@@ -123,6 +123,64 @@ class AccountSelectView(View):
             print(f"選択処理中のエラー: {e}")
             await interaction.response.send_message("アカウント選択中にエラーが発生しました。", ephemeral=True)
 
+class AccountSelectView(View):
+    def __init__(self, user_id: str, records: list):
+        super().__init__(timeout=900.0)  # タイムアウトを15分に設定
+        self.user_id = user_id
+        self.records = records
+
+        # プルダウンメニューのオプションを生成
+        self.account_selection = Select(
+            placeholder="利用するアカウントを選んでください",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label=record["name"], value=str(index))
+                for index, record in enumerate(records)
+            ]
+        )
+        self.account_selection.callback = self.on_select_account
+        self.add_item(self.account_selection)
+
+    async def on_select_account(self, interaction: discord.Interaction):
+        try:
+            # 選択されたアカウントのインデックスを取得
+            selected_index = int(self.account_selection.values[0])
+            selected_account = self.records[selected_index]
+
+            # すでに借りているアカウントがあるか確認
+            current_borrowed = next(
+                (record for record in self.records if record.get("borrower") == self.user_id),
+                None
+            )
+            if current_borrowed:
+                await interaction.response.send_message(
+                    f"あなたは既にアカウント **{current_borrowed['name']}** を借りています。返却してください。",
+                    ephemeral=True
+                )
+                return
+
+            # スプレッドシートの更新
+            sheet.update_cell(selected_index + 2, 5, "borrowed")  # 状態を "borrowed" に
+            sheet.update_cell(selected_index + 2, 6, self.user_id)  # 借り手を設定
+
+            # 応答メッセージを送信
+            await interaction.response.send_message(
+                f"アカウント **{selected_account['name']}** の詳細:\n"
+                f"**ID**: {selected_account['id']}\n"
+                f"**パスワード**: {selected_account['password']}\n"
+                f"**ランク**: {selected_account['rank']}",
+                ephemeral=True
+            )
+
+            # 全体通知
+            channel = bot.get_channel(1307661467578925056)  # 通知用チャンネルID
+            if channel is not None:
+                await channel.send(f"ユーザー <@{self.user_id}> がアカウント **{selected_account['name']}** を借りました！")
+        except Exception as e:
+            print(f"選択処理中のエラー: {e}")
+            await interaction.response.send_message("アカウント選択中にエラーが発生しました。", ephemeral=True)
+
 # アカウント利用
 @bot.tree.command(name="use_account")
 async def use_account(interaction: discord.Interaction):
@@ -150,6 +208,7 @@ async def use_account(interaction: discord.Interaction):
         view=AccountSelectView(user_id, available_accounts),
         ephemeral=True
     )
+
 
 # ボット起動時の処理
 @bot.event
