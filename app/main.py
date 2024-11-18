@@ -117,11 +117,7 @@ async def use_account(interaction: discord.Interaction):
             borrowed_accounts[interaction.user.id] = selected_account
             user_status[interaction.user.id] = True
             await interaction.response.send_message(
-                f"アカウント {selected_account['name']} を借りました。\n"
-                f"ID: {selected_account['id']}\n"
-                f"Password: {selected_account['password']}\n"
-                f"Rank: {selected_account['rank']}", 
-                ephemeral=True
+                f"アカウント {selected_account['name']} を借りました。", ephemeral=True
             )
             await interaction.channel.send(
                 f"{interaction.user.name}が{selected_account['name']}を借りました！"
@@ -141,35 +137,12 @@ async def return_account(interaction: discord.Interaction):
         return
 
     account = borrowed_accounts.pop(interaction.user.id)
+    sheet.update_cell(account["row"], 5, "available")
     user_status.pop(interaction.user.id)
-
-    # ランクを入力するためのモーダルを作成
-    class RankUpdateModal(discord.ui.Modal):
-        def __init__(self):
-            super().__init__(title="ランク更新フォーム")
-            self.add_item(discord.ui.TextInput(
-                label="New Rank",
-                placeholder="例: Intermediate",
-                custom_id="new-rank",
-                required=True
-            ))
-
-        async def on_submit(self, interaction: discord.Interaction):
-            new_rank = self.children[0].value
-            # スプレッドシートのランク列を更新
-            sheet.update_cell(account["row"], 4, new_rank)
-            # ステータスを 'available' に更新
-            sheet.update_cell(account["row"], 5, "available")
-            await interaction.response.send_message(
-                f"アカウント {account['name']} を返却し、ランクを {new_rank} に更新しました。", 
-                ephemeral=True
-            )
-            await interaction.channel.send(
-                f"{interaction.user.name}が{account['name']}を返却し、ランクを {new_rank} に更新しました！"
-            )
-
-    # モーダルを表示
-    await interaction.response.send_modal(RankUpdateModal())
+    await interaction.response.send_message(
+        f"アカウント {account['name']} を返却しました。", ephemeral=True
+    )
+    await interaction.channel.send(f"{interaction.user.name}が{account['name']}を返却しました！")
 
 # Flaskアプリケーションの設定 (ヘルスチェック用)
 app = Flask(__name__)
