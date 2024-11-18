@@ -110,6 +110,10 @@ async def return_account(ctx):
     await ctx.send(f"アカウント {account['name']} を返却しました。", ephemeral=True)
     await ctx.channel.send(f"{ctx.author.name}が{account['name']}を返却しました！")
 
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 # Discord Botを起動
 TOKEN = os.getenv("TOKEN")
 bot.run(TOKEN)
