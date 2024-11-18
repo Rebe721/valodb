@@ -93,7 +93,7 @@ class AccountSelectView(View):
             # スプレッドシートの更新
             selected_account["status"] = "borrowed"
             selected_account["borrower"] = self.user_id
-            update_sheet_data("Accounts!A2:F100", self.records)  # 必要に応じてシート範囲を変更
+            update_sheet_data("Accounts!A2:F", self.records)  # 必要に応じてシート範囲を変更
 
             # 応答メッセージを送信
             await interaction.response.send_message(
