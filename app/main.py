@@ -1,88 +1,97 @@
-import discord
-from discord.ext import commands
-from discord.ui import View, Select
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
+import logging
 from flask import Flask
-import threading
+from threading import Thread
+import discord
+from discord.ext import commands
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
-# Flask アプリのセットアップ（Koyebのヘルスチェック用）
+# Flaskアプリのセットアップ（Koyebのヘルスチェック用）
 app = Flask(__name__)
 
-@app.route("/")
-def health_check():
-    return "OK", 200
+@app.route('/')
+def home():
+    return "Instance is healthy. All health checks are passing."
 
-def run_server():
+def run():
     app.run(host="0.0.0.0", port=8080)
 
-server_thread = threading.Thread(target=run_server)
-server_thread.daemon = True
-server_thread.start()
+# 環境変数からTOKENとCREDENTIALS_JSONを取得
+DISCORD_TOKEN = os.getenv("TOKEN")
+CREDENTIALS_JSON = os.getenv("CREDENTIALS_JSON")
 
-# Google Sheets APIとの接続設定
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials_data = json.loads(os.environ["CREDENTIALS_JSON"])
-credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials_data, scope)
-gc = gspread.authorize(credentials)
-sheet = gc.open("Accounts").sheet1  # アカウントデータのシート
+if not DISCORD_TOKEN or not CREDENTIALS_JSON:
+    raise EnvironmentError("環境変数 'TOKEN' または 'CREDENTIALS_JSON' が設定されていません。")
 
-# ボットの設定
+# Google Sheets APIの認証
+credentials = Credentials.from_service_account_info(json.loads(CREDENTIALS_JSON))
+sheets_service = build("sheets", "v4", credentials=credentials)
+SPREADSHEET_ID = "1_xEKOwz4WsYv7C4bQRpwuRl4AOJnokFZktVpB9yIRCc"  # 必要に応じて設定してください
+
+# Discord Botのセットアップ
 intents = discord.Intents.default()
-intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# アカウント登録
-@bot.tree.command(name="register")
-async def register(interaction: discord.Interaction, name: str, account_id: str, password: str, rank: str):
-    try:
-        # スプレッドシートに新しいアカウントを登録
-        sheet.append_row([name, account_id, password, rank, "available", ""])
-        await interaction.response.send_message(f"アカウント **{name}** が正常に登録されました。", ephemeral=True)
-    except discord.errors.NotFound:
-        await interaction.followup.send(f"アカウント **{name}** が正常に登録されました。（応答が遅延した可能性があります）", ephemeral=True)
+logging.basicConfig(level=logging.INFO)
 
-# アカウント返却
+# Google Sheetsからデータ取得
+def get_sheet_data(range_name):
+    sheet = sheets_service.spreadsheets()
+    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=range_name).execute()
+    return result.get("values", [])
+
+# Google Sheetsにデータ書き込み
+def update_sheet_data(range_name, values):
+    body = {"values": values}
+    sheet = sheets_service.spreadsheets()
+    result = sheet.values().update(
+        spreadsheetId=SPREADSHEET_ID, range=range_name,
+        valueInputOption="RAW", body=body
+    ).execute()
+    return result
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+
 @bot.tree.command(name="return_account")
-async def return_account(interaction: discord.Interaction, name: str, new_rank: str):
+async def return_account(interaction: discord.Interaction, name: str):
     user_id = str(interaction.user.id)
-    records = sheet.get_all_records()
-    for index, record in enumerate(records):
-        borrower = str(record.get("borrower", ""))
-        if record.get("name", "").strip() == name and borrower.strip() == user_id:
-            try:
-                # スプレッドシートの更新
-                sheet.update_cell(index + 2, 4, new_rank)  # ランクを更新
-                sheet.update_cell(index + 2, 5, "available")  # 状態を更新
-                sheet.update_cell(index + 2, 6, "")  # 借り手をクリア
-                await interaction.response.send_message(f"アカウント **{name}** が返却され、ランクが更新されました。", ephemeral=True)
+    try:
+        records = get_sheet_data("Accounts!A2:F")  # 必要に応じてシート名を変更してください
+        for index, record in enumerate(records):
+            if len(record) >= 6:  # borrowerカラムが存在することを確認
+                account_name = record[0].strip() if record[0] else ""
+                borrower = str(record[5]).strip() if len(record) > 5 else ""
 
-                # 全体通知
-                channel = bot.get_channel(1305414048187154474)  # 通知用チャンネルID
-                if channel is not None:
-                    await channel.send(f"ユーザー <@{user_id}> がアカウント **{name}** を返却しました！ 新ランク: {new_rank}")
-                return
-            except Exception as e:
-                print(f"スプレッドシートの更新中にエラー: {e}")
-                await interaction.response.send_message("アカウントの返却中にエラーが発生しました。", ephemeral=True)
-                return
-    await interaction.response.send_message("アカウントの返却に失敗しました。指定されたアカウントを借りていない可能性があります。", ephemeral=True)
+                if account_name == name and borrower == user_id:
+                    # アカウントのステータスを更新
+                    records[index][4] = "available"  # 状態を "available" に
+                    records[index][5] = ""  # borrowerをクリア
+                    update_sheet_data(f"Sheet1!A2:F{len(records)+1}", records)
 
-class AccountSelectView(View):
-    def __init__(self, user_id: str, records: list):
-        super().__init__(timeout=900.0)  # タイムアウトを15分に設定
+                    await interaction.response.send_message(
+                        f"アカウント **{name}** を返却しました！", ephemeral=True
+                    )
+                    return
+        await interaction.response.send_message(
+            "指定されたアカウントが見つかりませんでした。", ephemeral=True
+        )
+    except Exception as e:
+        logging.error(f"return_accountエラー: {e}")
+        await interaction.response.send_message("エラーが発生しました。", ephemeral=True)
+
+class AccountSelectView(discord.ui.View):
+    def __init__(self, user_id, records):
+        super().__init__(timeout=900.0)
         self.user_id = user_id
         self.records = records
-
-        # プルダウンメニューのオプションを生成
-        self.account_selection = Select(
+        self.account_selection = discord.ui.Select(
             placeholder="利用するアカウントを選んでください",
-            min_values=1,
-            max_values=1,
             options=[
-                discord.SelectOption(label=record["name"], value=str(index))
+                discord.SelectOption(label=record[0], value=str(index))
                 for index, record in enumerate(records)
             ]
         )
@@ -91,76 +100,47 @@ class AccountSelectView(View):
 
     async def on_select_account(self, interaction: discord.Interaction):
         try:
-            # 選択されたアカウントのインデックスを取得
             selected_index = int(self.account_selection.values[0])
             selected_account = self.records[selected_index]
 
-            # すでに借りているアカウントがあるか確認
-            current_borrowed = next(
-                (record for record in self.records if record.get("borrower") == self.user_id),
-                None
-            )
-            if current_borrowed:
-                await interaction.response.send_message(
-                    f"あなたは既にアカウント **{current_borrowed['name']}** を借りています。返却してください。",
-                    ephemeral=True
-                )
-                return
+            # Google Sheets更新
+            self.records[selected_index][4] = "borrowed"
+            self.records[selected_index][5] = self.user_id
+            update_sheet_data(f"Sheet1!A2:F{len(self.records)+1}", self.records)
 
-            # スプレッドシートの更新
-            sheet.update_cell(selected_index + 2, 5, "borrowed")  # 状態を "borrowed" に
-            sheet.update_cell(selected_index + 2, 6, self.user_id)  # 借り手を設定
-
-            # 応答メッセージを送信
+            # 応答メッセージ送信
             await interaction.response.send_message(
-                f"アカウント **{selected_account['name']}** の詳細:\n"
-                f"**ID**: {selected_account['id']}\n"
-                f"**パスワード**: {selected_account['password']}\n"
-                f"**ランク**: {selected_account['rank']}",
+                f"アカウント **{selected_account[0]}** の詳細:\n"
+                f"**ID**: {selected_account[1]}\n"
+                f"**パスワード**: {selected_account[2]}\n"
+                f"**ランク**: {selected_account[3]}",
                 ephemeral=True
             )
 
-            # 全体通知
-            channel = bot.get_channel(1307661467578925056)  # 通知用チャンネルID
-            if channel is not None:
-                await channel.send(f"ユーザー <@{self.user_id}> がアカウント **{selected_account['name']}** を借りました！")
+            # 通知チャンネルへの送信
+            try:
+                channel = bot.get_channel(1307661467578925056)  # チャンネルIDを適切に設定
+                if channel:
+                    await channel.send(
+                        f"ユーザー <@{self.user_id}> がアカウント **{selected_account[0]}** を借りました！"
+                    )
+                else:
+                    logging.warning("通知チャンネルが見つかりませんでした。")
+            except discord.errors.Forbidden:
+                logging.warning("通知チャンネルへのアクセス権がありません。")
         except Exception as e:
-            print(f"選択処理中のエラー: {e}")
-            await interaction.response.send_message("アカウント選択中にエラーが発生しました。", ephemeral=True)
+            logging.error(f"アカウント選択処理中のエラー: {e}")
+            try:
+                await interaction.response.send_message(
+                    "アカウント選択中にエラーが発生しました。", ephemeral=True
+                )
+            except discord.errors.InteractionResponded:
+                logging.warning("インタラクションはすでに応答済みです。")
 
-# アカウント利用
-@bot.tree.command(name="use_account")
-async def use_account(interaction: discord.Interaction):
-    user_id = str(interaction.user.id)
-    records = sheet.get_all_records()
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 
-    # ユーザーがすでに借りているアカウントを確認
-    borrowed_account = next((record for record in records if record.get("borrower") == user_id), None)
-    if borrowed_account:
-        await interaction.response.send_message(
-            f"あなたは既にアカウント **{borrowed_account['name']}** を借りています。返却してください。",
-            ephemeral=True
-        )
-        return
-
-    # 利用可能なアカウントを取得
-    available_accounts = [record for record in records if record.get("status") == "available"]
-    if not available_accounts:
-        await interaction.response.send_message("利用可能なアカウントがありません。", ephemeral=True)
-        return
-
-    # アカウント選択メニューを表示
-    await interaction.response.send_message(
-        "利用するアカウントを選んでください:",
-        view=AccountSelectView(user_id, available_accounts),
-        ephemeral=True
-    )
-
-
-# ボット起動時の処理
-@bot.event
-async def on_ready():
-    print(f"{bot.user} がログインしました!")
-
-# ボットの起動
-bot.run(os.environ["TOKEN"])  # Discordトークンは環境変数から取得
+if __name__ == "__main__":
+    keep_alive()
+    bot.run(TOKEN)
