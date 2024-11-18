@@ -29,51 +29,61 @@ tree = bot.tree  # スラッシュコマンド用の管理クラス
 borrowed_accounts = {}
 user_status = {}
 
-# カスタムモーダルクラス
-class AccountRegisterModal(discord.ui.Modal):
-    def __init__(self):
-        super().__init__(title="アカウント登録フォーム")
-        self.add_item(discord.ui.TextInput(
+# 登録コマンド
+@tree.command(name="register", description="新しいアカウントを登録します")
+async def register(interaction: discord.Interaction):
+    # モーダルの作成
+    modal = discord.ui.Modal(title="アカウント登録フォーム")
+
+    # 各入力フィールドを追加
+    modal.add_item(
+        discord.ui.TextInput(
             label="Name",
             placeholder="例: Tanaka Taro",
             custom_id="account-name",
             required=True
-        ))
-        self.add_item(discord.ui.TextInput(
+        )
+    )
+    modal.add_item(
+        discord.ui.TextInput(
             label="ID",
             placeholder="例: user123",
             custom_id="account-id",
             required=True
-        ))
-        self.add_item(discord.ui.TextInput(
+        )
+    )
+    modal.add_item(
+        discord.ui.TextInput(
             label="Password",
             placeholder="例: ******",
             custom_id="account-password",
             required=True
-        ))
-        self.add_item(discord.ui.TextInput(
+        )
+    )
+    modal.add_item(
+        discord.ui.TextInput(
             label="Rank",
             placeholder="例: Beginner",
             custom_id="account-rank",
             required=True
-        ))
+        )
+    )
 
-    async def on_submit(self, interaction: discord.Interaction):
-        name = self.children[0].value
-        account_id = self.children[1].value
-        password = self.children[2].value
-        rank = self.children[3].value
+    # モーダル送信後の処理
+    async def modal_callback(interaction_modal: discord.Interaction):
+        name = interaction_modal.text_values["account-name"]
+        account_id = interaction_modal.text_values["account-id"]
+        password = interaction_modal.text_values["account-password"]
+        rank = interaction_modal.text_values["account-rank"]
 
         # スプレッドシートに追加
         sheet.append_row([name, account_id, password, rank, "available"])
-        await interaction.response.send_message(
+        await interaction_modal.response.send_message(
             f"アカウント {name} を登録しました！", ephemeral=True
         )
 
-# 登録コマンド
-@tree.command(name="register", description="新しいアカウントを登録します")
-async def register(interaction: discord.Interaction):
-    await interaction.response.send_modal(AccountRegisterModal())
+    modal.callback = modal_callback
+    await interaction.response.send_modal(modal)
 
 # アカウント選択コマンド
 @tree.command(name="use_account", description="アカウントを借りる")
@@ -117,7 +127,11 @@ async def use_account(interaction: discord.Interaction):
             borrowed_accounts[interaction.user.id] = selected_account
             user_status[interaction.user.id] = True
             await interaction.response.send_message(
-                f"アカウント {selected_account['name']} を借りました。", ephemeral=True
+                f"アカウント {selected_account['name']} を借りました。\n"
+                f"ID: {selected_account['id']}\n"
+                f"Password: {selected_account['password']}\n"
+                f"Rank: {selected_account['rank']}", 
+                ephemeral=True
             )
             await interaction.channel.send(
                 f"{interaction.user.name}が{selected_account['name']}を借りました！"
@@ -126,7 +140,6 @@ async def use_account(interaction: discord.Interaction):
     view = discord.ui.View()
     view.add_item(AccountDropdown())
     await interaction.response.send_message("アカウントを選択してください:", view=view, ephemeral=True)
-
 
 # アカウント返却コマンド
 @tree.command(name="return_account", description="アカウントを返却する")
@@ -138,12 +151,35 @@ async def return_account(interaction: discord.Interaction):
         return
 
     account = borrowed_accounts.pop(interaction.user.id)
-    sheet.update_cell(account["row"], 5, "available")
     user_status.pop(interaction.user.id)
-    await interaction.response.send_message(
-        f"アカウント {account['name']} を返却しました。", ephemeral=True
-    )
-    await interaction.channel.send(f"{interaction.user.name}が{account['name']}を返却しました！")
+
+    # ランクを入力するためのモーダルを作成
+    class RankUpdateModal(discord.ui.Modal):
+        def __init__(self):
+            super().__init__(title="ランク更新フォーム")
+            self.add_item(discord.ui.TextInput(
+                label="New Rank",
+                placeholder="例: Intermediate",
+                custom_id="new-rank",
+                required=True
+            ))
+
+        async def on_submit(self, interaction: discord.Interaction):
+            new_rank = self.children[0].value
+            # スプレッドシートのランク列を更新
+            sheet.update_cell(account["row"], 4, new_rank)
+            # ステータスを 'available' に更新
+            sheet.update_cell(account["row"], 5, "available")
+            await interaction.response.send_message(
+                f"アカウント {account['name']} を返却し、ランクを {new_rank} に更新しました。", 
+                ephemeral=True
+            )
+            await interaction.channel.send(
+                f"{interaction.user.name}が{account['name']}を返却し、ランクを {new_rank} に更新しました！"
+            )
+
+    # モーダルを表示
+    await interaction.response.send_modal(RankUpdateModal())
 
 # Flaskアプリケーションの設定 (ヘルスチェック用)
 app = Flask(__name__)
