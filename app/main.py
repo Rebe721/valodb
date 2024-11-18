@@ -29,61 +29,51 @@ tree = bot.tree  # スラッシュコマンド用の管理クラス
 borrowed_accounts = {}
 user_status = {}
 
-# 登録コマンド
-@tree.command(name="register", description="新しいアカウントを登録します")
-async def register(interaction: discord.Interaction):
-    # モーダルの作成
-    modal = discord.ui.Modal(title="アカウント登録フォーム")
-
-    # 各入力フィールドを追加
-    modal.add_item(
-        discord.ui.TextInput(
+# カスタムモーダルクラス
+class AccountRegisterModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="アカウント登録フォーム")
+        self.add_item(discord.ui.TextInput(
             label="Name",
             placeholder="例: Tanaka Taro",
             custom_id="account-name",
             required=True
-        )
-    )
-    modal.add_item(
-        discord.ui.TextInput(
+        ))
+        self.add_item(discord.ui.TextInput(
             label="ID",
             placeholder="例: user123",
             custom_id="account-id",
             required=True
-        )
-    )
-    modal.add_item(
-        discord.ui.TextInput(
+        ))
+        self.add_item(discord.ui.TextInput(
             label="Password",
             placeholder="例: ******",
             custom_id="account-password",
             required=True
-        )
-    )
-    modal.add_item(
-        discord.ui.TextInput(
+        ))
+        self.add_item(discord.ui.TextInput(
             label="Rank",
             placeholder="例: Beginner",
             custom_id="account-rank",
             required=True
-        )
-    )
+        ))
 
-    # モーダル送信後の処理
-    async def modal_callback(interaction_modal: discord.Interaction):
-        name = interaction_modal.text_values["account-name"]
-        account_id = interaction_modal.text_values["account-id"]
-        password = interaction_modal.text_values["account-password"]
-        rank = interaction_modal.text_values["account-rank"]
+    async def on_submit(self, interaction: discord.Interaction):
+        name = self.children[0].value
+        account_id = self.children[1].value
+        password = self.children[2].value
+        rank = self.children[3].value
 
         # スプレッドシートに追加
         sheet.append_row([name, account_id, password, rank, "available"])
-        await interaction_modal.response.send_message(
+        await interaction.response.send_message(
             f"アカウント {name} を登録しました！", ephemeral=True
         )
 
-    modal.callback = modal_callback
-    await interaction.response.send_modal(modal)
+# 登録コマンド
+@tree.command(name="register", description="新しいアカウントを登録します")
+async def register(interaction: discord.Interaction):
+    await interaction.response.send_modal(AccountRegisterModal())
 
 # アカウント選択コマンド
 @tree.command(name="use_account", description="アカウントを借りる")
