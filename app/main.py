@@ -76,6 +76,7 @@ async def register(interaction: discord.Interaction):
     await interaction.response.send_modal(AccountRegisterModal())
 
 # アカウント選択コマンド
+# アカウント選択コマンド (詳細情報の送信を追加)
 @tree.command(name="use_account", description="アカウントを借りる")
 async def use_account(interaction: discord.Interaction):
     if interaction.user.id in user_status:
@@ -116,9 +117,16 @@ async def use_account(interaction: discord.Interaction):
             sheet.update_cell(selected_account["row"], 5, "borrowed")
             borrowed_accounts[interaction.user.id] = selected_account
             user_status[interaction.user.id] = True
-            await interaction.response.send_message(
-                f"アカウント {selected_account['name']} を借りました。", ephemeral=True
+
+            # 選択したアカウントの詳細を表示
+            account_details = (
+                f"**アカウント情報:**\n"
+                f"**Name:** {selected_account['name']}\n"
+                f"**ID:** {selected_account['id']}\n"
+                f"**Password:** {selected_account['password']}\n"
+                f"**Rank:** {selected_account['rank']}\n"
             )
+            await interaction.response.send_message(account_details, ephemeral=True)
             await interaction.channel.send(
                 f"{interaction.user.name}が{selected_account['name']}を借りました！"
             )
@@ -127,7 +135,8 @@ async def use_account(interaction: discord.Interaction):
     view.add_item(AccountDropdown())
     await interaction.response.send_message("アカウントを選択してください:", view=view, ephemeral=True)
 
-# アカウント返却コマンド
+
+# アカウント返却コマンド (ランク更新を追加)
 @tree.command(name="return_account", description="アカウントを返却する")
 async def return_account(interaction: discord.Interaction):
     if interaction.user.id not in borrowed_accounts:
@@ -137,12 +146,36 @@ async def return_account(interaction: discord.Interaction):
         return
 
     account = borrowed_accounts.pop(interaction.user.id)
-    sheet.update_cell(account["row"], 5, "available")
-    user_status.pop(interaction.user.id)
-    await interaction.response.send_message(
-        f"アカウント {account['name']} を返却しました。", ephemeral=True
-    )
-    await interaction.channel.send(f"{interaction.user.name}が{account['name']}を返却しました！")
+
+    class RankUpdateModal(discord.ui.Modal):
+        def __init__(self):
+            super().__init__(title="ランク更新")
+            self.add_item(discord.ui.TextInput(
+                label="新しいランクを入力 (例: Intermediate)",
+                placeholder="変更がなければ同じランクを入力してください",
+                default=account["rank"],
+                custom_id="new-rank",
+                required=True
+            ))
+
+        async def on_submit(self, interaction: discord.Interaction):
+            new_rank = self.children[0].value
+            if new_rank != account["rank"]:
+                # スプレッドシートのランクセルを更新
+                sheet.update_cell(account["row"], 4, new_rank)
+
+            sheet.update_cell(account["row"], 5, "available")
+            user_status.pop(interaction.user.id)
+            await interaction.response.send_message(
+                f"アカウント {account['name']} を返却しました。\n**新しいランク:** {new_rank}",
+                ephemeral=True
+            )
+            await interaction.channel.send(
+                f"{interaction.user.name}が{account['name']}を返却しました！"
+            )
+
+    # ランク更新モーダルを表示
+    await interaction.response.send_modal(RankUpdateModal())
 
 # Flaskアプリケーションの設定 (ヘルスチェック用)
 app = Flask(__name__)
