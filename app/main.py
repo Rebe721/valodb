@@ -177,6 +177,31 @@ async def return_account(interaction: discord.Interaction):
     # ランク更新モーダルを表示
     await interaction.response.send_modal(RankUpdateModal())
 
+@bot.command()
+async def remove_comment(ctx):
+    """テキストチャネル内のコメントを削除するコマンド"""
+    if not ctx.author.guild_permissions.manage_messages:
+        await ctx.send("このコマンドを使用する権限がありません。")
+        return
+
+    def is_comment(message):
+        # コードブロック、画像、ファイルを含むメッセージを削除対象から除外
+        has_codeblock = "```" in message.content
+        has_attachment = message.attachments
+        has_embeds = message.embeds
+        return not (has_codeblock or has_attachment or has_embeds)
+
+    # 現在のチャンネルのすべてのメッセージを取得し、条件に基づき削除
+    deleted_count = 0
+    async for message in ctx.channel.history(limit=100):  # 必要に応じてlimitを調整
+        if message.author == bot.user:  # 自分のメッセージを除外
+            continue
+        if is_comment(message):
+            await message.delete()
+            deleted_count += 1
+
+    await ctx.send(f"コメントを {deleted_count} 件削除しました！")
+
 # Flaskアプリケーションの設定 (ヘルスチェック用)
 app = Flask(__name__)
 
