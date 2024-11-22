@@ -185,37 +185,35 @@ async def remove_comment(interaction: discord.Interaction):
         await interaction.response.send_message("このコマンドを使用する権限がありません。", ephemeral=True)
         return
 
+    await interaction.response.defer()  # 初期応答を送信し、処理を待機させる
+
     channel = interaction.channel
     now = datetime.datetime.now(datetime.timezone.utc)
     bulk_deletable_messages = []
     async_deletable_messages = []
 
     async for message in channel.history(limit=100):  # 必要に応じてlimitを調整
-        # メッセージが削除対象かを判定
         if not message.attachments and not "```" in message.content and not message.embeds:
-            # 14日以内のメッセージは一括削除用に分類
             if (now - message.created_at).days <= 14:
                 bulk_deletable_messages.append(message)
             else:
-                # 14日以上前のメッセージは個別削除用に分類
                 async_deletable_messages.append(message)
 
-    # 一括削除の処理
+    # 一括削除
+    bulk_deleted_count = 0
     if bulk_deletable_messages:
         await channel.delete_messages(bulk_deletable_messages)
         bulk_deleted_count = len(bulk_deletable_messages)
-    else:
-        bulk_deleted_count = 0
 
-    # 非同期個別削除の処理
+    # 個別削除
     async_deleted_count = 0
     for message in async_deletable_messages:
         await message.delete()
         async_deleted_count += 1
-        await asyncio.sleep(0.5)  # Rate Limit 対策の遅延（調整可能）
+        await asyncio.sleep(0.5)
 
     total_deleted = bulk_deleted_count + async_deleted_count
-    await interaction.response.send_message(
+    await interaction.followup.send(
         f"削除が完了しました！\n- 一括削除: {bulk_deleted_count} 件\n- 個別削除: {async_deleted_count} 件\n- 合計: {total_deleted} 件"
     )
 
