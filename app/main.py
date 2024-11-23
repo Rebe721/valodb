@@ -217,6 +217,26 @@ async def remove_comment(interaction: discord.Interaction):
         f"削除が完了しました！\n- 一括削除: {bulk_deleted_count} 件\n- 個別削除: {async_deleted_count} 件\n- 合計: {total_deleted} 件"
     )
 
+@tree.command(name="reset_borrowed", description="借用状態を手動でリセットします（管理者専用）")
+async def reset_borrowed(interaction: discord.Interaction, user_id: str):
+    # このコマンドを使用するには、管理者権限が必要
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("このコマンドを使用する権限がありません。", ephemeral=True)
+        return
+
+    try:
+        # 指定されたユーザーIDの借用状態をリセット
+        user_id = int(user_id)  # ユーザーIDを整数に変換
+        if user_id in borrowed_accounts:
+            borrowed_accounts.pop(user_id)  # 借用状態を削除
+            user_status.pop(user_id, None)  # ユーザーステータスも削除
+            await interaction.response.send_message(f"ユーザーID {user_id} の借用状態をリセットしました。", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"ユーザーID {user_id} は現在借用状態ではありません。", ephemeral=True)
+    except ValueError:
+        await interaction.response.send_message("正しいユーザーIDを入力してください。", ephemeral=True)
+
+
 # Flaskアプリケーションの設定 (ヘルスチェック用)
 app = Flask(__name__)
 
