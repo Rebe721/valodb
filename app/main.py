@@ -236,30 +236,37 @@ async def reset_borrowed(interaction: discord.Interaction):
 
     await interaction.followup.send("すべてのアカウントの借用状態をリセットしました！", ephemeral=True)
 
-# ボット起動
-@bot.event
-async def on_ready():
-    print(f"Bot is ready. Logged in as {bot.user}!")
-    try:
-        synced = await tree.sync()
-        print(f"Synced {len(synced)} command(s).")
-    except Exception as e:
-        print(f"Failed to sync commands: {e}")
+class MyBot(commands.Bot):
+    async def setup_hook(self):
+        # Flaskサーバーをバックグラウンドで実行
+        loop = asyncio.get_event_loop()
+        loop.create_task(start_flask())
 
-# Flaskアプリ起動 (サーバー用)
-app = Flask("")
+bot = MyBot(command_prefix="/", intents=intents)
+tree = bot.tree  # スラッシュコマンド用の管理クラス
 
-@app.route("/")
-def home():
-    return "Bot is running!"
+# Flaskアプリケーションの設定 (ヘルスチェック用)
+app = Flask(__name__)
 
-def run():
+@app.route("/health")
+def health_check():
+    return "OK", 200
+
+async def start_flask():
     app.run(host="0.0.0.0", port=8080)
 
-# 非同期でFlaskサーバーを起動
-async def start_flask():
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, run)
+# Bot準備完了時のイベント
+@bot.event
+async def on_ready():
+    await tree.sync()  # スラッシュコマンドを同期
+    print(f"Logged in as {bot.user}")
 
-bot.loop.create_task(start_flask())
-bot.run(os.getenv("DISCORD_TOKEN"))
+# Botの起動
+TOKEN = os.getenv("TOKEN")
+
+async def main():
+    async with bot:
+        await bot.start(TOKEN)
+
+if __name__ == "__main__":
+    asyncio.run(main())
