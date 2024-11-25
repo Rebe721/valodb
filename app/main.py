@@ -78,7 +78,6 @@ async def register(interaction: discord.Interaction):
     await interaction.response.send_modal(AccountRegisterModal())
 
 # アカウント選択コマンド
-# アカウント選択コマンド (詳細情報の送信を追加)
 @tree.command(name="use_account", description="アカウントを借りる")
 async def use_account(interaction: discord.Interaction):
     if interaction.user.id in user_status:
@@ -87,10 +86,9 @@ async def use_account(interaction: discord.Interaction):
         )
         return
 
-    # スプレッドシートデータを取得し、行番号を追加
     accounts = sheet.get_all_records()
     available_accounts = [
-        {**acc, "row": index + 2}  # 行番号を計算 (ヘッダー行を考慮)
+        {**acc, "row": index + 2}
         for index, acc in enumerate(accounts)
         if acc["status"] == "available"
     ]
@@ -101,7 +99,6 @@ async def use_account(interaction: discord.Interaction):
         )
         return
 
-    # プルダウンメニューを作成
     options = [
         discord.SelectOption(label=f"{acc['name']} ({acc['rank']})", value=acc["name"])
         for acc in available_accounts
@@ -112,15 +109,17 @@ async def use_account(interaction: discord.Interaction):
             super().__init__(placeholder="アカウントを選択してください", options=options)
 
         async def callback(self, interaction: discord.Interaction):
+            if interaction.response.is_done():
+                print("インタラクション応答済みです。")
+                return
+
             selected_account = next(
                 acc for acc in available_accounts if acc["name"] == self.values[0]
             )
-            # 'row' を利用して行を更新
             sheet.update_cell(selected_account["row"], 5, "borrowed")
             borrowed_accounts[interaction.user.id] = selected_account
             user_status[interaction.user.id] = True
 
-            # 選択したアカウントの詳細を表示
             account_details = (
                 f"**アカウント情報:**\n"
                 f"**Name:** {selected_account['name']}\n"
@@ -135,10 +134,10 @@ async def use_account(interaction: discord.Interaction):
 
     view = discord.ui.View()
     view.add_item(AccountDropdown())
-    await interaction.response.send_message("アカウントを選択してください:", view=view, ephemeral=True)
+    if not interaction.response.is_done():
+        await interaction.response.send_message("アカウントを選択してください:", view=view, ephemeral=True)
 
-
-# アカウント返却コマンド (ランク更新を追加)
+# アカウント返却コマンド
 @tree.command(name="return_account", description="アカウントを返却する")
 async def return_account(interaction: discord.Interaction):
     if interaction.user.id not in borrowed_accounts:
@@ -163,7 +162,6 @@ async def return_account(interaction: discord.Interaction):
         async def on_submit(self, interaction: discord.Interaction):
             new_rank = self.children[0].value
             if new_rank != account["rank"]:
-                # スプレッドシートのランクセルを更新
                 sheet.update_cell(account["row"], 4, new_rank)
 
             sheet.update_cell(account["row"], 5, "available")
@@ -176,7 +174,6 @@ async def return_account(interaction: discord.Interaction):
                 f"{interaction.user.name}が{account['name']}を返却しました！\n**更新後のランク**:{new_rank}"
             )
 
-    # ランク更新モーダルを表示
     await interaction.response.send_modal(RankUpdateModal())
 
 @tree.command(name="remove_comment", description="コードブロック、画像、ファイルを除くコメントを削除します。")
@@ -193,7 +190,8 @@ async def remove_comment(interaction: discord.Interaction):
     async_deletable_messages = []
 
     async for message in channel.history(limit=100):  # 必要に応じてlimitを調整
-        if not message.attachments and not "```" in message.content and not message.embeds:
+        if not message.attachments and not "
+" in message.content and not message.embeds:
             if (now - message.created_at).days <= 14:
                 bulk_deletable_messages.append(message)
             else:
@@ -217,25 +215,31 @@ async def remove_comment(interaction: discord.Interaction):
         f"削除が完了しました！\n- 一括削除: {bulk_deleted_count} 件\n- 個別削除: {async_deleted_count} 件\n- 合計: {total_deleted} 件"
     )
 
+# 借用状態リセットコマンド
 @tree.command(name="reset_borrowed", description="借用状態を手動でリセットします（管理者専用）")
 async def reset_borrowed(interaction: discord.Interaction, user_id: str):
-    # このコマンドを使用するには、管理者権限が必要
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("このコマンドを使用する権限がありません。", ephemeral=True)
         return
 
-    try:
-        # 指定されたユーザーIDの借用状態をリセット
-        user_id = int(user_id)  # ユーザーIDを整数に変換
-        if user_id in borrowed_accounts:
-            borrowed_accounts.pop(user_id)  # 借用状態を削除
-            user_status.pop(user_id, None)  # ユーザーステータスも削除
-            await interaction.response.send_message(f"ユーザーID {user_id} の借用状態をリセットしました。", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"ユーザーID {user_id} は現在借用状態ではありません。", ephemeral=True)
-    except ValueError:
-        await interaction.response.send_message("正しいユーザーIDを入力してください。", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
 
+    try:
+        user_id = int(user_id)
+        if user_id in borrowed_accounts:
+            borrowed_accounts.pop(user_id)
+            user_status.pop(user_id, None)
+            await interaction.followup.send(
+                f"ユーザーID {user_id} の借用状態をリセットしました。", ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                f"ユーザーID {user_id} は現在借用状態ではありません。", ephemeral=True
+            )
+    except ValueError:
+        await interaction.followup.send(
+            "正しいユーザーIDを入力してください。", ephemeral=True
+        )
 
 # Flaskアプリケーションの設定 (ヘルスチェック用)
 app = Flask(__name__)
