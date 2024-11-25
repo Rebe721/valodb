@@ -78,6 +78,7 @@ async def register(interaction: discord.Interaction):
     await interaction.response.send_modal(AccountRegisterModal())
 
 # アカウント選択コマンド
+# アカウント選択コマンド (詳細情報の送信を追加)
 @tree.command(name="use_account", description="アカウントを借りる")
 async def use_account(interaction: discord.Interaction):
     if interaction.user.id in user_status:
@@ -111,8 +112,6 @@ async def use_account(interaction: discord.Interaction):
             super().__init__(placeholder="アカウントを選択してください", options=options)
 
         async def callback(self, interaction: discord.Interaction):
-            if interaction.response.is_done():
-                return  # 二重応答を防止
             selected_account = next(
                 acc for acc in available_accounts if acc["name"] == self.values[0]
             )
@@ -138,7 +137,8 @@ async def use_account(interaction: discord.Interaction):
     view.add_item(AccountDropdown())
     await interaction.response.send_message("アカウントを選択してください:", view=view, ephemeral=True)
 
-# アカウント返却コマンド
+
+# アカウント返却コマンド (ランク更新を追加)
 @tree.command(name="return_account", description="アカウントを返却する")
 async def return_account(interaction: discord.Interaction):
     if interaction.user.id not in borrowed_accounts:
@@ -179,7 +179,6 @@ async def return_account(interaction: discord.Interaction):
     # ランク更新モーダルを表示
     await interaction.response.send_modal(RankUpdateModal())
 
-# コメント削除コマンド
 @tree.command(name="remove_comment", description="コードブロック、画像、ファイルを除くコメントを削除します。")
 async def remove_comment(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.manage_messages:
@@ -215,35 +214,28 @@ async def remove_comment(interaction: discord.Interaction):
 
     total_deleted = bulk_deleted_count + async_deleted_count
     await interaction.followup.send(
-        f"削除が完了しました！\n- 一括削除: {bulk_deleted_count} 件\n- 個別削除: {async_deleted_count} 件\n**合計: {total_deleted} 件**"
+        f"削除が完了しました！\n- 一括削除: {bulk_deleted_count} 件\n- 個別削除: {async_deleted_count} 件\n- 合計: {total_deleted} 件"
     )
 
-@tree.command(name="reset_borrowed", description="すべてのアカウントの借用状態をリセットします")
-async def reset_borrowed(interaction: discord.Interaction):
+@tree.command(name="reset_borrowed", description="借用状態を手動でリセットします（管理者専用）")
+async def reset_borrowed(interaction: discord.Interaction, user_id: str):
+    # このコマンドを使用するには、管理者権限が必要
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("このコマンドを使用する権限がありません。", ephemeral=True)
         return
 
-    await interaction.response.defer()  # 初期応答を送信して非同期処理を待機可能にする
+    try:
+        # 指定されたユーザーIDの借用状態をリセット
+        user_id = int(user_id)  # ユーザーIDを整数に変換
+        if user_id in borrowed_accounts:
+            borrowed_accounts.pop(user_id)  # 借用状態を削除
+            user_status.pop(user_id, None)  # ユーザーステータスも削除
+            await interaction.response.send_message(f"ユーザーID {user_id} の借用状態をリセットしました。", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"ユーザーID {user_id} は現在借用状態ではありません。", ephemeral=True)
+    except ValueError:
+        await interaction.response.send_message("正しいユーザーIDを入力してください。", ephemeral=True)
 
-    accounts = sheet.get_all_records()
-    for index, account in enumerate(accounts):
-        row = index + 2  # 行番号を計算（ヘッダー行を考慮）
-        sheet.update_cell(row, 5, "available")  # "status"列を更新
-
-    borrowed_accounts.clear()  # ローカルキャッシュをクリア
-    user_status.clear()  # ユーザー状態もクリア
-
-    await interaction.followup.send("すべてのアカウントの借用状態をリセットしました！", ephemeral=True)
-
-class MyBot(commands.Bot):
-    async def setup_hook(self):
-        # Flaskサーバーをバックグラウンドで実行
-        loop = asyncio.get_event_loop()
-        loop.create_task(start_flask())
-
-bot = MyBot(command_prefix="/", intents=intents)
-tree = bot.tree  # スラッシュコマンド用の管理クラス
 
 # Flaskアプリケーションの設定 (ヘルスチェック用)
 app = Flask(__name__)
@@ -252,8 +244,16 @@ app = Flask(__name__)
 def health_check():
     return "OK", 200
 
-async def start_flask():
+# Discord Botを起動するスレッドとFlaskサーバーを同時に起動
+from threading import Thread
+
+def run_flask():
     app.run(host="0.0.0.0", port=8080)
+
+# Flask サーバーをバックグラウンドで実行
+thread = Thread(target=run_flask)
+thread.daemon = True
+thread.start()
 
 # Bot準備完了時のイベント
 @bot.event
@@ -261,12 +261,6 @@ async def on_ready():
     await tree.sync()  # スラッシュコマンドを同期
     print(f"Logged in as {bot.user}")
 
-# Botの起動
+# Discord Botを起動
 TOKEN = os.getenv("TOKEN")
-
-async def main():
-    async with bot:
-        await bot.start(TOKEN)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+bot.run(TOKEN)
