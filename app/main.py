@@ -141,13 +141,23 @@ async def use_account(interaction: discord.Interaction):
 # アカウント返却コマンド (ランク更新を追加)
 @tree.command(name="return_account", description="アカウントを返却する")
 async def return_account(interaction: discord.Interaction):
+    # 借用状態を再確認
     if interaction.user.id not in borrowed_accounts:
         await interaction.response.send_message(
             "返却するアカウントがありません。", ephemeral=True
         )
         return
 
-    account = borrowed_accounts.pop(interaction.user.id)
+    account = borrowed_accounts.get(interaction.user.id)
+    if not account or sheet.cell(account["row"], 5).value != "borrowed":
+        # 状態が不整合な場合、自動修正
+        borrowed_accounts.pop(interaction.user.id, None)
+        user_status.pop(interaction.user.id, None)
+        await interaction.response.send_message(
+            "アカウントの借用状態が不整合でしたが、自動的にリセットしました。再度借用してください。",
+            ephemeral=True
+        )
+        return
 
     class RankUpdateModal(discord.ui.Modal):
         def __init__(self):
@@ -167,13 +177,14 @@ async def return_account(interaction: discord.Interaction):
                 sheet.update_cell(account["row"], 4, new_rank)
 
             sheet.update_cell(account["row"], 5, "available")
-            user_status.pop(interaction.user.id)
+            borrowed_accounts.pop(interaction.user.id, None)  # 状態をリセット
+            user_status.pop(interaction.user.id, None)  # ユーザーステータスを削除
             await interaction.response.send_message(
                 f"アカウント {account['name']} を返却しました。\n**新しいランク:** {new_rank}",
                 ephemeral=True
             )
             await interaction.channel.send(
-                f"{interaction.user.name}が{account['name']}を返却しました！\n**更新後のランク**:{new_rank}"
+                f"{interaction.user.name}が{account['name']}を返却しました！\n**更新後のランク:** {new_rank}"
             )
 
     # ランク更新モーダルを表示
