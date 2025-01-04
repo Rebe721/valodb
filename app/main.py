@@ -87,7 +87,7 @@ async def register(interaction: discord.Interaction):
 
 # 自動返却タスクの定義
 async def auto_return_account(user_id: int, account: dict, guild_id: int, channel_id: int):
-    await asyncio.sleep(60)  # 5時間待機
+    await asyncio.sleep(5 * 60 * 60)  # 5時間待機
     # 自動返却処理
     try:
         logging.info(f"自動返却処理開始: User ID={user_id}, Account={account['name']}")
