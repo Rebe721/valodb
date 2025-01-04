@@ -185,7 +185,7 @@ async def use_account(interaction: discord.Interaction):
                 return
 
             user_status[interaction.user.id] = True
-            borrowed_accounts[interaction.user.id] = {"account": selected_account, "task": None}
+            borrowed_accounts[interaction.user.id] = {"account": selected_account, "task": None, "guild_id": interaction.guild.id, "channel_id": interaction.channel.id}
 
             # 自動返却タスクを作成
             guild_id = interaction.guild.id if interaction.guild else None
@@ -238,16 +238,17 @@ async def return_account(interaction: discord.Interaction):
     guild_id = account_info.get("guild_id")
     channel_id = account_info.get("channel_id")
 
-    # インタラクションのレスポンスをデファー（延期）する
-    await interaction.response.defer(ephemeral=True)
+    # 返却処理前にデファーは不要なので削除
+    # await interaction.response.defer(ephemeral=True)  # 削除
 
+    # 状態の不整合をチェック
     if not account or sheet.cell(account["row"], 5).value != "borrowed":
         # 状態が不整合な場合、自動修正
         borrowed_accounts.pop(interaction.user.id, None)
         user_status.pop(interaction.user.id, None)
         if task:
             task.cancel()
-        await interaction.followup.send(
+        await interaction.response.send_message(
             "アカウントの借用状態が不整合でしたが、自動的にリセットしました。再度借用してください。",
             ephemeral=True
         )
@@ -257,6 +258,7 @@ async def return_account(interaction: discord.Interaction):
     if task:
         task.cancel()
 
+    # モーダルクラスの定義
     class RankUpdateModal(discord.ui.Modal):
         def __init__(self):
             super().__init__(title="ランク更新")
@@ -331,7 +333,7 @@ async def return_account(interaction: discord.Interaction):
                 f"{user.mention} が **{account['name']}** を返却しました！\n**更新後のランク:** {new_rank}"
             )
 
-    # ランク更新モーダルを表示
+    # モーダルを作成して送信
     modal = RankUpdateModal()
     await interaction.response.send_modal(modal)
 
