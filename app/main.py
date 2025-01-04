@@ -9,6 +9,10 @@ from flask import Flask
 import asyncio
 import datetime
 from threading import Thread
+import logging
+
+# ログの設定
+logging.basicConfig(level=logging.INFO)
 
 # GoogleスプレッドシートAPIのスコープ
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -26,6 +30,7 @@ intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
 intents.guilds = True
+intents.members = True  # メンバー情報を取得するために追加
 bot = commands.Bot(command_prefix="/", intents=intents)
 tree = bot.tree  # スラッシュコマンド用の管理クラス
 
@@ -85,6 +90,7 @@ async def auto_return_account(user_id: int, account: dict, guild_id: int, channe
     await asyncio.sleep(60)  # 5時間待機
     # 自動返却処理
     try:
+        logging.info(f"自動返却処理開始: User ID={user_id}, Account={account['name']}")
         # スプレッドシートの状態を更新
         sheet.update_cell(account["row"], 5, "available")
         borrowed_accounts.pop(user_id, None)
@@ -93,25 +99,26 @@ async def auto_return_account(user_id: int, account: dict, guild_id: int, channe
         # サーバーとチャンネルを取得
         guild = bot.get_guild(guild_id)
         if guild is None:
-            print(f"Guild ID {guild_id} が見つかりません。")
+            logging.error(f"Guild ID {guild_id} が見つかりません。")
             return
         channel = guild.get_channel(channel_id)
         if channel is None:
-            print(f"Channel ID {channel_id} がGuild ID {guild_id}内に見つかりません。")
+            logging.error(f"Channel ID {channel_id} がGuild ID {guild_id}内に見つかりません。")
             return
 
         # ユーザーを取得
         user = guild.get_member(user_id)
         if user is None:
-            print(f"User ID {user_id} がGuild ID {guild_id}内に見つかりません。")
+            logging.error(f"User ID {user_id} がGuild ID {guild_id}内に見つかりません。")
             return
 
         # 通知メッセージを送信
         await channel.send(
             f"{user.mention} の **{account['name']}** に返却処理を行いました。一定期間が経過したため、自動的に返却されました。"
         )
+        logging.info(f"自動返却処理完了: User ID={user_id}, Account={account['name']}")
     except Exception as e:
-        print(f"自動返却中にエラーが発生しました: {e}")
+        logging.error(f"自動返却中にエラーが発生しました: {e}")
 
 # アカウント選択コマンド
 @tree.command(name="use_account", description="アカウントを借りる")
@@ -122,8 +129,20 @@ async def use_account(interaction: discord.Interaction):
         )
         return
 
+    # インタラクションのレスポンスをデファー（延期）する
+    await interaction.response.defer(ephemeral=True)
+
     # スプレッドシートデータを取得し、行番号を追加
-    accounts = sheet.get_all_records()
+    try:
+        accounts = sheet.get_all_records()
+    except Exception as e:
+        logging.error(f"スプレッドシートからデータ取得中にエラーが発生しました: {e}")
+        await interaction.followup.send(
+            "スプレッドシートからデータを取得できませんでした。後でもう一度試してください。",
+            ephemeral=True
+        )
+        return
+
     available_accounts = [
         {**acc, "row": index + 2}  # 行番号を計算 (ヘッダー行を考慮)
         for index, acc in enumerate(accounts)
@@ -131,7 +150,7 @@ async def use_account(interaction: discord.Interaction):
     ]
 
     if not available_accounts:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "利用可能なアカウントがありません。", ephemeral=True
         )
         return
@@ -151,7 +170,16 @@ async def use_account(interaction: discord.Interaction):
                 acc for acc in available_accounts if acc["name"] == self.values[0]
             )
             # 'row' を利用して行を更新
-            sheet.update_cell(selected_account["row"], 5, "borrowed")
+            try:
+                sheet.update_cell(selected_account["row"], 5, "borrowed")
+            except Exception as e:
+                logging.error(f"スプレッドシートの状態更新中にエラーが発生しました: {e}")
+                await interaction.response.send_message(
+                    "アカウントの状態を更新できませんでした。後でもう一度試してください。",
+                    ephemeral=True
+                )
+                return
+
             user_status[interaction.user.id] = True
             borrowed_accounts[interaction.user.id] = {"account": selected_account, "task": None}
 
@@ -188,7 +216,7 @@ async def use_account(interaction: discord.Interaction):
 
     view = discord.ui.View()
     view.add_item(AccountDropdown())
-    await interaction.response.send_message("アカウントを選択してください:", view=view, ephemeral=True)
+    await interaction.followup.send("アカウントを選択してください:", view=view, ephemeral=True)
 
 # アカウント返却コマンド
 @tree.command(name="return_account", description="アカウントを返却する")
@@ -206,13 +234,16 @@ async def return_account(interaction: discord.Interaction):
     guild_id = account_info.get("guild_id")
     channel_id = account_info.get("channel_id")
 
+    # インタラクションのレスポンスをデファー（延期）する
+    await interaction.response.defer(ephemeral=True)
+
     if not account or sheet.cell(account["row"], 5).value != "borrowed":
         # 状態が不整合な場合、自動修正
         borrowed_accounts.pop(interaction.user.id, None)
         user_status.pop(interaction.user.id, None)
         if task:
             task.cancel()
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "アカウントの借用状態が不整合でしたが、自動的にリセットしました。再度借用してください。",
             ephemeral=True
         )
@@ -236,27 +267,44 @@ async def return_account(interaction: discord.Interaction):
         async def on_submit(self, interaction: discord.Interaction):
             new_rank = self.children[0].value
             if new_rank != account["rank"]:
-                # スプレッドシートのランクセルを更新
-                sheet.update_cell(account["row"], 4, new_rank)
+                try:
+                    # スプレッドシートのランクセルを更新
+                    sheet.update_cell(account["row"], 4, new_rank)
+                except Exception as e:
+                    logging.error(f"スプレッドシートのランクセル更新中にエラーが発生しました: {e}")
+                    await interaction.response.send_message(
+                        "ランクの更新に失敗しました。後でもう一度試してください。",
+                        ephemeral=True
+                    )
+                    return
 
-            sheet.update_cell(account["row"], 5, "available")
+            try:
+                sheet.update_cell(account["row"], 5, "available")
+            except Exception as e:
+                logging.error(f"スプレッドシートの状態更新中にエラーが発生しました: {e}")
+                await interaction.response.send_message(
+                    "アカウントの状態を更新できませんでした。後でもう一度試してください。",
+                    ephemeral=True
+                )
+                return
+
             borrowed_accounts.pop(interaction.user.id, None)  # 状態をリセット
             user_status.pop(interaction.user.id, None)  # ユーザーステータスを削除
 
             # サーバーとチャンネルを取得
             guild = bot.get_guild(guild_id)
             if guild is None:
-                print(f"Guild ID {guild_id} が見つかりません。")
+                logging.error(f"Guild ID {guild_id} が見つかりません。")
                 await interaction.response.send_message(
-                    f"アカウント {account['name']} を返却しました。\n**新しいランク:** {new_rank}",
+                    f"アカウント **{account['name']}** を返却しました。\n**新しいランク:** {new_rank}",
                     ephemeral=True
                 )
                 return
             channel = guild.get_channel(channel_id)
             if channel is None:
-                print(f"Channel ID {channel_id} がGuild ID {guild_id}内に見つかりません。")
+                logging.error(f"Channel ID {channel_id} がGuild ID {guild_id}内に見つかりません。")
                 await interaction.response.send_message(
-                    f"アカウント {account['name']} を返却しました。\n**新しいランク:** {new_rank}",
+                    f"アカウント **{account['name']}** を返却しました。\n**新しいランク:** {new_rank}",
                     ephemeral=True
                 )
                 return
@@ -264,9 +312,9 @@ async def return_account(interaction: discord.Interaction):
             # ユーザーを取得
             user = guild.get_member(interaction.user.id)
             if user is None:
-                print(f"User ID {interaction.user.id} がGuild ID {guild_id}内に見つかりません。")
+                logging.error(f"User ID {interaction.user.id} がGuild ID {guild_id}内に見つかりません。")
                 await interaction.response.send_message(
-                    f"アカウント {account['name']} を返却しました。\n**新しいランク:** {new_rank}",
+                    f"アカウント **{account['name']}** を返却しました。\n**新しいランク:** {new_rank}",
                     ephemeral=True
                 )
                 return
@@ -280,7 +328,8 @@ async def return_account(interaction: discord.Interaction):
             )
 
     # ランク更新モーダルを表示
-    await interaction.response.send_modal(RankUpdateModal())
+    modal = RankUpdateModal()
+    await interaction.response.send_modal(modal)
 
 # コメント削除コマンド（既存のまま）
 @tree.command(name="remove_comment", description="コードブロック、画像、ファイルを除くコメントを削除します。")
@@ -306,15 +355,21 @@ async def remove_comment(interaction: discord.Interaction):
     # 一括削除
     bulk_deleted_count = 0
     if bulk_deletable_messages:
-        await channel.delete_messages(bulk_deletable_messages)
-        bulk_deleted_count = len(bulk_deletable_messages)
+        try:
+            await channel.delete_messages(bulk_deletable_messages)
+            bulk_deleted_count = len(bulk_deletable_messages)
+        except Exception as e:
+            logging.error(f"一括削除中にエラーが発生しました: {e}")
 
     # 個別削除
     async_deleted_count = 0
     for message in async_deletable_messages:
-        await message.delete()
-        async_deleted_count += 1
-        await asyncio.sleep(0.5)
+        try:
+            await message.delete()
+            async_deleted_count += 1
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            logging.error(f"個別削除中にエラーが発生しました: {e}")
 
     total_deleted = bulk_deleted_count + async_deleted_count
     await interaction.followup.send(
@@ -364,7 +419,7 @@ thread.start()
 @bot.event
 async def on_ready():
     await tree.sync()  # スラッシュコマンドを同期
-    print(f"Logged in as {bot.user}")
+    logging.info(f"Logged in as {bot.user}")
 
 # Discord Botを起動
 TOKEN = os.getenv("TOKEN")
