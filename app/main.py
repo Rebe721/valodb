@@ -10,6 +10,7 @@ import asyncio
 import datetime
 from threading import Thread
 import logging
+from zoneinfo import ZoneInfo  # タイムゾーン管理用モジュールのインポート
 
 # ログの設定
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +34,9 @@ intents.guilds = True
 intents.members = True  # メンバー情報を取得するために追加
 bot = commands.Bot(command_prefix="/", intents=intents)
 tree = bot.tree  # スラッシュコマンド用の管理クラス
+
+# タイムゾーンの設定
+TOKYO_TZ = ZoneInfo("Asia/Tokyo")  # 東京のタイムゾーンを定義
 
 # ユーザーの借用状態を保持
 # {user_id: {"account": account_data, "task": task, "guild_id": guild_id, "channel_id": channel_id}}
@@ -196,9 +200,9 @@ async def use_account(interaction: discord.Interaction):
             task = asyncio.create_task(auto_return_account(interaction.user.id, selected_account, guild_id, channel_id))
             borrowed_accounts[interaction.user.id]["task"] = task
 
-            # 借用期限を計算
-            return_time = datetime.datetime.utcnow() + datetime.timedelta(hours=5)
-            return_time_str = return_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+            # 借用期限を東京時間で計算
+            return_time = datetime.datetime.now(TOKYO_TZ) + datetime.timedelta(hours=5)
+            return_time_str = return_time.strftime('%Y-%m-%d %H:%M:%S %Z')  # タイムゾーン名を表示
 
             # 選択したアカウントの詳細を表示
             account_details = (
