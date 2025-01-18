@@ -3,6 +3,9 @@ FROM python:3.11
 # 作業ディレクトリを指定
 WORKDIR /bot
 
+#ffmpeg インストール
+RUN apt-get update && apt-get install -y ffmpeg
+
 # 日本語環境の設定
 RUN apt-get update && apt-get -y install locales && apt-get -y upgrade && \
     localedef -f UTF-8 -i ja_JP ja_JP.UTF-8

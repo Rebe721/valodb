@@ -7,3 +7,7 @@ google-auth-httplib2
 oauth2client
 Flask
 python-dotenv
+PyNaCl
+Pillow
+imageio
+numpy
