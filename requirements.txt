@@ -11,3 +11,5 @@ PyNaCl
 Pillow
 imageio
 numpy
+asyncio
+ffmpeg
